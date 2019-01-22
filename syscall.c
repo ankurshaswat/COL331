@@ -103,6 +103,7 @@ extern int sys_unlink(void);
 extern int sys_wait(void);
 extern int sys_write(void);
 extern int sys_uptime(void);
+extern int sys_toggle(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -126,7 +127,18 @@ static int (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_toggle]  sys_toggle,
 };
+
+int count[23];
+int display_sys_calls = 1;
+
+int
+sys_toggle(void) 
+{
+  display_sys_calls = !display_sys_calls;
+  return 1;
+}
 
 void
 syscall(void)
@@ -136,6 +148,37 @@ syscall(void)
 
   num = curproc->tf->eax;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
+    count[num]++;
+
+    if(display_sys_calls) {
+      switch(num) {
+          case 1:cprintf("sys_fork");break;
+          case 2:cprintf("sys_exit");break;
+          case 3:cprintf("sys_wait");break;
+          case 4:cprintf("sys_pipe");break;
+          case 5:cprintf("sys_read");break;
+          case 6:cprintf("sys_kill");break;
+          case 7:cprintf("sys_exec");break;
+          case 8:cprintf("sys_fstat");break;
+          case 9:cprintf("sys_chdir");break;
+          case 10:cprintf("sys_dup");break;
+          case 11:cprintf("sys_getpid");break;
+          case 12:cprintf("sys_sbrk");break;
+          case 13:cprintf("sys_sleep");break;
+          case 14:cprintf("sys_uptime");break;
+          case 15:cprintf("sys_open");break;
+          case 16:cprintf("sys_write");break;
+          case 17:cprintf("sys_mknod");break;
+          case 18:cprintf("sys_unlink");break;
+          case 19:cprintf("sys_link");break;
+          case 20:cprintf("sys_mkdir");break;
+          case 21:cprintf("sys_close");break;
+          case 22:cprintf("sys_toggle");break;
+          default:cprintf("unknown case");
+      }
+      cprintf(" %d\n",count[num]);
+    }
+
     curproc->tf->eax = syscalls[num]();
   } else {
     cprintf("%d %s: unknown sys call %d\n",
