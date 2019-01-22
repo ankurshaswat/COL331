@@ -104,6 +104,7 @@ extern int sys_wait(void);
 extern int sys_write(void);
 extern int sys_uptime(void);
 extern int sys_toggle(void);
+extern int sys_add(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -128,6 +129,7 @@ static int (*syscalls[])(void) = {
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
 [SYS_toggle]  sys_toggle,
+[SYS_add]     sys_add,
 };
 
 int count[23];
@@ -138,6 +140,18 @@ sys_toggle(void)
 {
   display_sys_calls = !display_sys_calls;
   return 1;
+}
+
+int
+sys_add(void) 
+{
+  int n1;
+  int n2;
+
+  argint(0,&n1);
+  argint(1,&n2);
+
+  return n1+n2;
 }
 
 void
@@ -174,6 +188,7 @@ syscall(void)
           case 20:cprintf("sys_mkdir");break;
           case 21:cprintf("sys_close");break;
           case 22:cprintf("sys_toggle");break;
+          case 23:cprintf("sys_add");break;
           default:cprintf("unknown case");
       }
       cprintf(" %d\n",count[num]);
