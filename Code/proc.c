@@ -20,6 +20,24 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+// Added code starts here
+
+void printProcess(void) {
+
+  struct proc *p;
+
+  acquire(&ptable.lock);
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    if(p->state == RUNNABLE || p->state == RUNNING || p->state == SLEEPING) {
+      cprintf("pid:%d name:%s\n",p->pid,p->name);
+    }
+
+  release(&ptable.lock);
+}
+
+// Ends here
+
 void
 pinit(void)
 {

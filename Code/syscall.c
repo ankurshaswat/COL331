@@ -105,6 +105,7 @@ extern int sys_write(void);
 extern int sys_uptime(void);
 extern int sys_toggle(void);
 extern int sys_add(void);
+extern int sys_ps(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -130,11 +131,12 @@ static int (*syscalls[])(void) = {
 [SYS_close]   sys_close,
 [SYS_toggle]  sys_toggle,
 [SYS_add]     sys_add,
+[SYS_ps]      sys_ps,
 };
 
 // Custom Code Start 
 
-int count[23];
+int count[NELEM(syscalls)];
 int display_sys_calls = 1;
 char *sys_call_names[] = {
   "sys_fork",
@@ -159,7 +161,9 @@ char *sys_call_names[] = {
   "sys_mkdir",
   "sys_close",
   "sys_toggle",
-  "sys_add"};
+  "sys_add",
+  "sys_ps"
+};
 
 int sys_toggle(void) 
 {
@@ -178,7 +182,19 @@ int sys_add(void)
   return n1+n2;
 }
 
+int sys_ps(void)
+{
+  // extern struct ptable;
+  //   acquire(&ptable.lock);
 
+  // for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  //   if(p->state == UNUSED)
+  //     goto found;
+
+  // release(&ptable.lock);
+  printProcess();
+  return 1;
+}
 
 // Custom Code end
 
@@ -191,7 +207,9 @@ syscall(void)
   num = curproc->tf->eax;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
     count[num]++;
-    cprintf("%s %d\n",sys_call_names[num],count[num]);
+    if(display_sys_calls) {
+      cprintf("%s %d\n",sys_call_names[num-1],count[num]);
+    }
     curproc->tf->eax = syscalls[num]();
   } else {
     cprintf("%d %s: unknown sys call %d\n",
