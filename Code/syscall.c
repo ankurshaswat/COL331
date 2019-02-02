@@ -106,6 +106,8 @@ extern int sys_uptime(void);
 extern int sys_toggle(void);
 extern int sys_add(void);
 extern int sys_ps(void);
+extern int sys_send(void);
+extern int sys_rec(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -132,9 +134,58 @@ static int (*syscalls[])(void) = {
 [SYS_toggle]  sys_toggle,
 [SYS_add]     sys_add,
 [SYS_ps]      sys_ps,
+[SYS_send]    sys_send,
+[SYS_rec]     sys_rec
 };
 
 // Custom Code Start 
+struct msg {
+  int val;
+  struct msg *next;
+};
+
+struct queue
+{
+    struct msg *head;
+    struct msg *tail;
+    void (*init)(struct queue*);
+    void (*insert)(struct queue*,struct msg*);
+    struct msg* (*remov)(struct queue*);
+};
+
+void init(struct queue* q) {
+  q->head = 0;
+  q->tail = 0;
+}
+
+void insert(struct queue* q,struct msg* n) {
+  if(q->head == 0) {
+    q->head = n;
+    q->tail = n;
+  } else {
+    n->next = 0;
+    q->tail->next = n;
+    q->tail = n;
+  }
+}
+
+struct msg* remov(struct queue* q) {
+  if(q->head==0) {
+    return 0;
+  } else {
+    struct msg* m = q->head;
+    // free memory ???
+    if(q->head == q->tail) {
+      q->head = 0;
+      q->tail =0;
+    } else {
+      q->head = q->head->next;
+    }
+    return m;
+  }
+}
+
+struct msg msgQ[NPROC];
 
 int count[NELEM(syscalls)];
 int display_sys_calls = 1;
@@ -162,13 +213,15 @@ char *sys_call_names[] = {
   "sys_close",
   "sys_toggle",
   "sys_add",
-  "sys_ps"
+  "sys_ps",
+  "sys_send",
+  "sys_rec"
 };
 
 int sys_toggle(void) 
 {
   display_sys_calls = !display_sys_calls;
-  return 1;
+  return 0;
 }
 
 int sys_add(void) 
@@ -176,24 +229,71 @@ int sys_add(void)
   int n1;
   int n2;
 
-  argint(0,&n1);
-  argint(1,&n2);
-
+  if(argint(0,&n1) < 0) {
+    return -1;
+  }
+  if(argint(1,&n2) < 0) {
+    return -1;
+  }
   return n1+n2;
 }
 
 int sys_ps(void)
 {
-  // extern struct ptable;
-  //   acquire(&ptable.lock);
-
-  // for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-  //   if(p->state == UNUSED)
-  //     goto found;
-
-  // release(&ptable.lock);
   printProcess();
-  return 1;
+  return 0;
+}
+
+int sys_send(void) {
+  int sender_pid;
+  int rec_pid;
+  char *msg;
+
+  if(argint(0,&sender_pid) <0) {
+    return -1;
+  }
+  if(argint(1,&rec_pid)<0) {
+    return -1;
+  }
+  if(argstr(2, &msg) < 0) {
+    return -1;
+  }
+  cprintf("%d %d %s\n",sender_pid,rec_pid,msg);
+
+  // Add Message to queue.
+
+  return 0;
+}
+
+int sys_rec(void) {
+  int sender_pid;
+  char *msg;
+  int *rec_id;
+
+  if(argint(0,&sender_pid) < 0) {
+    return -1;
+  }
+
+  if(argptr(1, (void*)&rec_id, sizeof(int)) < 0) {
+    return -1;
+  }
+
+  if(argptr(2, (void*)&msg, 8*sizeof(char)) < 0) {
+    return -1;
+  }
+
+  msg="hello";
+  // int *rec_id = (int*)rec_addr;
+  *rec_id = 10;
+
+  cprintf("rec %d %d %d\n",sender_pid,rec_id,&msg);
+
+  // rec_id = 10;
+  // msg = "hello";
+
+  // Remove msg from queue
+
+  return 0;
 }
 
 // Custom Code end
