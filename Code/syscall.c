@@ -107,7 +107,7 @@ extern int sys_toggle(void);
 extern int sys_add(void);
 extern int sys_ps(void);
 extern int sys_send(void);
-extern int sys_rec(void);
+extern int sys_recv(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -135,22 +135,27 @@ static int (*syscalls[])(void) = {
 [SYS_add]     sys_add,
 [SYS_ps]      sys_ps,
 [SYS_send]    sys_send,
-[SYS_rec]     sys_rec
+[SYS_recv]    sys_recv
 };
 
 // Custom Code Start 
 struct msg {
-  int val;
+  int sender_pid;
+  char msg[8];
+  int bufferPosition;
   struct msg *next;
 };
+
+struct msg msgBuffer[256];
+int bufferAllocated[256] = {0};
 
 struct queue
 {
     struct msg *head;
     struct msg *tail;
-    void (*init)(struct queue*);
-    void (*insert)(struct queue*,struct msg*);
-    struct msg* (*remov)(struct queue*);
+    // void (*init)(struct queue*);
+    // void (*insert)(struct queue*,struct msg*);
+    // struct msg* (*remov)(struct queue*);
 };
 
 void init(struct queue* q) {
@@ -159,11 +164,11 @@ void init(struct queue* q) {
 }
 
 void insert(struct queue* q,struct msg* n) {
+  n->next = 0;
   if(q->head == 0) {
     q->head = n;
     q->tail = n;
   } else {
-    n->next = 0;
     q->tail->next = n;
     q->tail = n;
   }
@@ -185,8 +190,8 @@ struct msg* remov(struct queue* q) {
   }
 }
 
-struct msg msgQ[NPROC];
-
+struct queue msgQ[NPROC];
+int initQ = 0;  
 int count[NELEM(syscalls)];
 int display_sys_calls = 1;
 char *sys_call_names[] = {
@@ -215,7 +220,7 @@ char *sys_call_names[] = {
   "sys_add",
   "sys_ps",
   "sys_send",
-  "sys_rec"
+  "sys_recv"
 };
 
 int sys_toggle(void) 
@@ -244,54 +249,127 @@ int sys_ps(void)
   return 0;
 }
 
+int *x;
+
 int sys_send(void) {
+  if(initQ == 0) {
+    for(int i=0;i<NPROC;i++) {
+      init(&msgQ[i]);
+    }
+    initQ=1;
+  }
+
   int sender_pid;
   int rec_pid;
-  char *msg;
+  char* msg;
 
   if(argint(0,&sender_pid) <0) {
     return -1;
   }
-  if(argint(1,&rec_pid)<0) {
-    return -1;
-  }
-  if(argstr(2, &msg) < 0) {
-    return -1;
-  }
-  cprintf("%d %d %s\n",sender_pid,rec_pid,msg);
 
-  // Add Message to queue.
+  if(argint(1,&rec_pid) <0) {
+    return -1;
+  }
+
+  if(argptr(2,(void*)&msg, sizeof(char*)) <0) {
+    return -1;
+  }
+
+  struct msg* new_msg;
+  for(int i=0;i<NELEM(msgBuffer);i++) {
+    if(bufferAllocated[i] == 0) {
+      bufferAllocated[i] = 1;
+      new_msg = &msgBuffer[i];
+      
+      new_msg->bufferPosition = i;
+      new_msg->sender_pid = sender_pid;
+      strncpy(new_msg->msg,msg,8);
+      new_msg->next = 0;
+      
+      insert(&msgQ[rec_pid],new_msg);
+
+      break;
+    }
+  }
+
 
   return 0;
+
+  // int sender_pid;
+  // int* rec_pids;
+  // char* msg;
+  // int num_pids;
+
+  // if(argint(0,&sender_pid) <0) {
+    // return -1;
+  // }
+
+  // // if(argptr(0, (void*)&fd, 2*sizeof(fd[0])) < 0)
+  // if(argptr(1,(void*)&rec_pids,sizeof(int*))<0) {
+  //   return -1;
+  // }
+  // if(NELEM(rec_pids) == 1) {
+  //   cprintf("hello");
+  //   num_pids = NELEM(rec_pids);
+  // }
+
+  // if(argstr(2, &msg) < 0) {
+  //   return -1;
+  // }
+
+  // if(num_pids == 1) { // unicast
+
+  // struct msg new_msg;
+  // new_msg.sender_pid = sender_pid;
+  // *new_msg.msg = *msg;
+
+  // // // Add Message to queue.
+  // insert(&msgQ[rec_pids[0]],&new_msg);
+
+  // } else { // multicast
+  //   for(int i=0;i<num_pids;i++) {
+  //       // send interrupt to rec_pids[i]
+  //   }
+  // }
+
 }
 
-int sys_rec(void) {
-  int sender_pid;
+int sys_recv(void) {
+  if(initQ == 0) {
+    for(int i=0;i<NPROC;i++) {
+      init(&msgQ[i]);
+    }
+    initQ=1;
+  }
+
+  int *myid;
+  int *from;
   char *msg;
-  int *rec_id;
 
-  if(argint(0,&sender_pid) < 0) {
+  if(argptr(0,(void*)&myid,sizeof(int*)) < 0) {
     return -1;
   }
 
-  if(argptr(1, (void*)&rec_id, sizeof(int)) < 0) {
+  *myid = myproc()->pid;
+  
+  if(argptr(1, (void*)&from, sizeof(int*)) < 0) {
+    return -1;
+  }
+  
+  if(argptr(2,(void*)&msg,sizeof(char*))<0) {
     return -1;
   }
 
-  if(argptr(2, (void*)&msg, 8*sizeof(char)) < 0) {
+  struct msg* msg_obj = remov(&msgQ[*myid]);
+
+  if(msg_obj == 0) {
     return -1;
   }
 
-  msg="hello";
-  // int *rec_id = (int*)rec_addr;
-  *rec_id = 10;
+  strncpy(msg,(*msg_obj).msg,8);
+  *from = (*msg_obj).sender_pid;
 
-  cprintf("rec %d %d %d\n",sender_pid,rec_id,&msg);
-
-  // rec_id = 10;
-  // msg = "hello";
-
-  // Remove msg from queue
+  bufferAllocated[msg_obj->bufferPosition] = 0;
 
   return 0;
 }
