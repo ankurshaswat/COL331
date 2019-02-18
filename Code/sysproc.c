@@ -7,6 +7,12 @@
 #include "mmu.h"
 #include "proc.h"
 
+int sys_ps(void)
+{
+  print_processes();
+  return 0;
+}
+
 int
 sys_fork(void)
 {

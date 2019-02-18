@@ -20,9 +20,7 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
-// Added code starts here
-
-void printProcess(void) {
+void print_processes(void) {
 
   struct proc *p;
 
@@ -35,8 +33,6 @@ void printProcess(void) {
 
   release(&ptable.lock);
 }
-
-// Ends here
 
 void
 pinit(void)

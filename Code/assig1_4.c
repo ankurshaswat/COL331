@@ -6,6 +6,6 @@ int
 main(void)
 {
 	// toggle(); // This toggles the system trace on or off
-	printf(1, "\nsum of 2 and 3 is: %d\n",add(2,3));
+	printf(1, "sum of 10 and -6 is: %d\n",add(10,-6));
 	exit();
 }

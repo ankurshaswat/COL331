@@ -24,10 +24,11 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int toggle(void);
+int print_count(void);
 int add(int n1,int n2);
 int ps(void);
-int send(int sender_pid,int rec_pid,void *msg);
-int recv(int* myid,int *from,void *msg);
+int send(int sender_pid,int rec_pid, void* msg);
+int recv(void *msg);
 
 // ulib.c
 int stat(const char*, struct stat*);

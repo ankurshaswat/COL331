@@ -1,4 +1,2 @@
-CHILD: Stat is:  0  and myid: 4
-CHILD: Message from: 3, msg is: Message from parent 
-PARENT: Stat is:  0  and myid: 3
-PARENT: Message from:  4 , msg is: Message from child 
+1 PARENT: msg sent is: P 
+2 CHILD: msg recv is: P 

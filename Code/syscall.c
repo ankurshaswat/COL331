@@ -103,6 +103,7 @@ extern int sys_unlink(void);
 extern int sys_wait(void);
 extern int sys_write(void);
 extern int sys_uptime(void);
+extern int sys_print_count(void);
 extern int sys_toggle(void);
 extern int sys_add(void);
 extern int sys_ps(void);
@@ -131,14 +132,146 @@ static int (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_print_count] sys_print_count,
 [SYS_toggle]  sys_toggle,
-[SYS_add]     sys_add,
-[SYS_ps]      sys_ps,
-[SYS_send]    sys_send,
-[SYS_recv]    sys_recv
+[SYS_add]  sys_add,
+[SYS_ps]  sys_ps,
+[SYS_send]  sys_send,
+[SYS_recv]  sys_recv,
 };
 
-// Custom Code Start 
+char *sys_call_names[] = {
+[SYS_fork]    "sys_fork",
+[SYS_exit]    "sys_exit",
+[SYS_wait]    "sys_wait",
+[SYS_pipe]    "sys_pipe",
+[SYS_read]    "sys_read",
+[SYS_kill]    "sys_kill",
+[SYS_exec]    "sys_exec",
+[SYS_fstat]   "sys_fstat",
+[SYS_chdir]   "sys_chdir",
+[SYS_dup]     "sys_dup",
+[SYS_getpid]  "sys_getpid",
+[SYS_sbrk]    "sys_sbrk",
+[SYS_sleep]   "sys_sleep",
+[SYS_uptime]  "sys_uptime",
+[SYS_open]    "sys_open",
+[SYS_write]   "sys_write",
+[SYS_mknod]   "sys_mknod",
+[SYS_unlink]  "sys_unlink",
+[SYS_link]    "sys_link",
+[SYS_mkdir]   "sys_mkdir",
+[SYS_close]   "sys_close",
+[SYS_print_count] "sys_print_count",
+[SYS_toggle]  "sys_toggle",
+[SYS_add]   "sys_add",
+[SYS_ps]   "sys_ps",
+[SYS_send]   "sys_send",
+[SYS_recv]   "sys_recv",
+};
+
+int alphabetical_mapping[] = {
+SYS_add,
+SYS_chdir,
+SYS_close,
+SYS_dup,
+SYS_exec,
+SYS_exit,
+SYS_fork,
+SYS_fstat,
+SYS_getpid,
+SYS_kill,
+SYS_link,
+SYS_mkdir,
+SYS_mknod,
+SYS_open,
+SYS_pipe,
+SYS_print_count,
+SYS_ps,
+SYS_read,
+SYS_recv,
+SYS_sbrk,
+SYS_send,
+SYS_sleep,
+SYS_toggle,
+SYS_unlink,
+SYS_uptime,
+SYS_wait,
+SYS_write
+};
+
+int count[NELEM(syscalls)];
+
+enum State { TRACE_ON=1,TRACE_OFF=0 };
+
+int display_sys_calls = TRACE_OFF;
+
+void
+syscall(void)
+{
+  int num;
+  struct proc *curproc = myproc();
+
+  num = curproc->tf->eax;
+  if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
+    if(display_sys_calls==TRACE_ON) {
+      count[num]++;
+    }
+    curproc->tf->eax = syscalls[num]();
+  } else {
+    cprintf("%d %s: unknown sys call %d\n",
+            curproc->pid, curproc->name, num);
+    curproc->tf->eax = -1;
+  }
+}
+
+int sys_add(void) 
+{
+  int n1;
+  int n2;
+
+  if(argint(0,&n1) < 0) {
+    return -1;
+  }
+  if(argint(1,&n2) < 0) {
+    return -1;
+  }
+  return n1+n2;
+}
+
+int
+sys_toggle(void) 
+{
+  if(display_sys_calls == TRACE_OFF) {
+    display_sys_calls = TRACE_ON;
+    for(int i=0;i<NELEM(count);i++) {
+      count[i]=0;
+    }
+  } else {
+    display_sys_calls = TRACE_OFF;
+  }
+  return 0;
+}
+
+int
+sys_print_count(void)
+{
+  for(int i=0;i<NELEM(alphabetical_mapping);i++) {
+    int sys_call_number = alphabetical_mapping[i];
+    if(count[sys_call_number]!=0) {
+    cprintf("%s %d\n",sys_call_names[sys_call_number],count[sys_call_number]);
+    }
+  }
+  return 0;
+}
+
+
+/*
+ * 
+ * Extra Code
+ * 
+*/
+
 struct msg {
   int sender_pid;
   char msg[8];
@@ -153,9 +286,6 @@ struct queue
 {
     struct msg *head;
     struct msg *tail;
-    // void (*init)(struct queue*);
-    // void (*insert)(struct queue*,struct msg*);
-    // struct msg* (*remov)(struct queue*);
 };
 
 void init(struct queue* q) {
@@ -179,7 +309,6 @@ struct msg* remov(struct queue* q) {
     return 0;
   } else {
     struct msg* m = q->head;
-    // free memory ???
     if(q->head == q->tail) {
       q->head = 0;
       q->tail =0;
@@ -192,64 +321,6 @@ struct msg* remov(struct queue* q) {
 
 struct queue msgQ[NPROC];
 int initQ = 0;  
-int count[NELEM(syscalls)];
-int display_sys_calls = 1;
-char *sys_call_names[] = {
-  "sys_fork",
-  "sys_exit",
-  "sys_wait",
-  "sys_pipe",
-  "sys_read",
-  "sys_kill",
-  "sys_exec",
-  "sys_fstat",
-  "sys_chdir",
-  "sys_dup",
-  "sys_getpid",
-  "sys_sbrk",
-  "sys_sleep",
-  "sys_uptime",
-  "sys_open",
-  "sys_write",
-  "sys_mknod",
-  "sys_unlink",
-  "sys_link",
-  "sys_mkdir",
-  "sys_close",
-  "sys_toggle",
-  "sys_add",
-  "sys_ps",
-  "sys_send",
-  "sys_recv"
-};
-
-int sys_toggle(void) 
-{
-  display_sys_calls = !display_sys_calls;
-  return 0;
-}
-
-int sys_add(void) 
-{
-  int n1;
-  int n2;
-
-  if(argint(0,&n1) < 0) {
-    return -1;
-  }
-  if(argint(1,&n2) < 0) {
-    return -1;
-  }
-  return n1+n2;
-}
-
-int sys_ps(void)
-{
-  printProcess();
-  return 0;
-}
-
-int *x;
 
 int sys_send(void) {
   if(initQ == 0) {
@@ -283,7 +354,7 @@ int sys_send(void) {
       
       new_msg->bufferPosition = i;
       new_msg->sender_pid = sender_pid;
-      strncpy(new_msg->msg,msg,8);
+      strncpy(new_msg->msg,msg,MSGSIZE);
       new_msg->next = 0;
       
       insert(&msgQ[rec_pid],new_msg);
@@ -295,43 +366,6 @@ int sys_send(void) {
 
   return 0;
 
-  // int sender_pid;
-  // int* rec_pids;
-  // char* msg;
-  // int num_pids;
-
-  // if(argint(0,&sender_pid) <0) {
-    // return -1;
-  // }
-
-  // // if(argptr(0, (void*)&fd, 2*sizeof(fd[0])) < 0)
-  // if(argptr(1,(void*)&rec_pids,sizeof(int*))<0) {
-  //   return -1;
-  // }
-  // if(NELEM(rec_pids) == 1) {
-  //   cprintf("hello");
-  //   num_pids = NELEM(rec_pids);
-  // }
-
-  // if(argstr(2, &msg) < 0) {
-  //   return -1;
-  // }
-
-  // if(num_pids == 1) { // unicast
-
-  // struct msg new_msg;
-  // new_msg.sender_pid = sender_pid;
-  // *new_msg.msg = *msg;
-
-  // // // Add Message to queue.
-  // insert(&msgQ[rec_pids[0]],&new_msg);
-
-  // } else { // multicast
-  //   for(int i=0;i<num_pids;i++) {
-  //       // send interrupt to rec_pids[i]
-  //   }
-  // }
-
 }
 
 int sys_recv(void) {
@@ -342,57 +376,26 @@ int sys_recv(void) {
     initQ=1;
   }
 
-  int *myid;
+  int myid;
   int *from;
   char *msg;
 
-  if(argptr(0,(void*)&myid,sizeof(int*)) < 0) {
+  myid = myproc()->pid;
+  
+  if(argptr(0,(void*)&msg,sizeof(char*))<0) {
     return -1;
   }
 
-  *myid = myproc()->pid;
-  
-  if(argptr(1, (void*)&from, sizeof(int*)) < 0) {
-    return -1;
-  }
-  
-  if(argptr(2,(void*)&msg,sizeof(char*))<0) {
-    return -1;
-  }
-
-  struct msg* msg_obj = remov(&msgQ[*myid]);
+  struct msg* msg_obj = remov(&msgQ[myid]);
 
   if(msg_obj == 0) {
     return -1;
   }
 
-  strncpy(msg,(*msg_obj).msg,8);
+  strncpy(msg,(*msg_obj).msg,MSGSIZE);
   *from = (*msg_obj).sender_pid;
 
   bufferAllocated[msg_obj->bufferPosition] = 0;
 
   return 0;
 }
-
-// Custom Code end
-
-void
-syscall(void)
-{
-  int num;
-  struct proc *curproc = myproc();
-
-  num = curproc->tf->eax;
-  if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
-    count[num]++;
-    if(display_sys_calls) {
-      cprintf("%s %d\n",sys_call_names[num-1],count[num]);
-    }
-    curproc->tf->eax = syscalls[num]();
-  } else {
-    cprintf("%d %s: unknown sys call %d\n",
-            curproc->pid, curproc->name, num);
-    curproc->tf->eax = -1;
-  }
-}
-
