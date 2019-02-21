@@ -546,3 +546,38 @@ procdump(void)
     cprintf("\n");
   }
 }
+
+void
+block(int pid)
+{
+  struct proc *p;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid){
+      p->state = SLEEPING;
+      release(&ptable.lock);
+      return;
+    }
+  }
+  release(&ptable.lock);
+  return;
+}
+
+void
+unblock(int pid)
+{
+ struct proc *p;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid){
+      if(p->state == SLEEPING)
+        p->state = RUNNABLE;
+      release(&ptable.lock);
+      return;
+    }
+  }
+  release(&ptable.lock);
+  return;
+}

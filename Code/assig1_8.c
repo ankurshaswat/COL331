@@ -70,14 +70,16 @@ main(int argc, char *argv[])
         
     int count =1;
     while(count < num_proc) {
-		int* msg;
+		int msg;
         int res = recv(&msg);
+
         if(res>=0) {
             count++;
-			local_sum += (*msg);
+			local_sum += (msg);
             // add msg to local sum
         }
     }
+    tot_sum = local_sum;
 
   	//------------------
 

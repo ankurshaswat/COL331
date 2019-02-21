@@ -192,8 +192,8 @@ UPROGS=\
 	_assig1_7\
 	_assig1_8\
 
-fs.img: mkfs README $(UPROGS)
-	./mkfs fs.img README $(UPROGS)
+fs.img: mkfs README arr.txt $(UPROGS)
+	./mkfs fs.img README arr.txt $(UPROGS)
 
 -include *.d
 

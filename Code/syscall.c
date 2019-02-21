@@ -359,6 +359,7 @@ int sys_send(void) {
       
       insert(&msgQ[rec_pid],new_msg);
 
+      // unblock(rec_pid);
       break;
     }
   }
@@ -389,6 +390,10 @@ int sys_recv(void) {
   struct msg* msg_obj = remov(&msgQ[myid]);
 
   if(msg_obj == 0) {
+    // block(myid);
+    // sched();
+    // msg_obj = remov(&msgQ[myid]);
+
     return -1;
   }
 
