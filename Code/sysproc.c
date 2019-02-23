@@ -95,3 +95,53 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+int
+sys_registerI(void) {
+  void (*interruptHandler)(void*);
+  if(argptr(0,(void*)&interruptHandler,sizeof(interruptHandler))<0) {
+    return -1;
+  }
+  int id = myproc()->pid;
+  registerI(id,(uint)interruptHandler);
+  return  0;
+}
+
+int
+sys_send_multi(void) {
+  int sender_pid;
+  int *rec_pids;
+  void* msg;
+  int length;
+
+  if(argint(0,&sender_pid) <0) {
+    return -1;
+  }
+
+  if(argint(3,&length) <0) {
+    return -1;
+  }
+
+  if(argptr(1,(void*)&rec_pids, length*sizeof(int*)) <0) {
+    return -1;
+  }
+
+  if(argptr(2,(void*)&msg, sizeof(void*)) <0) {
+    return -1;
+  }
+
+  for(int i=0;i<length;i++) {
+    int rec_pid = rec_pids[i];
+    callInterrupt(rec_pid,msg);
+    cprintf("SYS_send_multi: Interrupt called for %d\n",rec_pid);
+  }
+
+  return 0;
+}
+
+int
+sys_return_to_kernel(void) {
+  cprintf("SYS_return_to_kernel: PID %d returned to kernel\n",myproc()->pid);
+  return_to_kernel(myproc()->pid);
+  return 0;
+}

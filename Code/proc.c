@@ -12,6 +12,11 @@ struct {
   struct proc proc[NPROC];
 } ptable;
 
+int sendInterruptSignal[NPROC] = {0};
+uint interruptHandlers[NPROC] = {0};
+int returnAddresses[NPROC];
+struct trapframe trapframeBackups[NPROC];
+
 static struct proc *initproc;
 
 int nextpid = 1;
@@ -27,7 +32,7 @@ void print_processes(void) {
   acquire(&ptable.lock);
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == RUNNABLE || p->state == RUNNING || p->state == SLEEPING) {
+    if(p->state != UNUSED) {
       cprintf("pid:%d name:%s\n",p->pid,p->name);
     }
 
@@ -355,6 +360,25 @@ scheduler(void)
       // before jumping back to us.
       c->proc = p;
       switchuvm(p);
+
+      if(sendInterruptSignal[p->pid] == 1)  {
+        sendInterruptSignal[p->pid] = 0;
+        memmove(&(trapframeBackups[p->pid]),p->tf ,sizeof(struct trapframe));
+        p->tf->eip = interruptHandlers[p->pid];
+        p->tf->esp -= 10;
+        *((int*)p->tf->esp) = 100;
+        // char msg[8] = "100";
+        // ((char*)p->tf->esp) = "100";
+        // ((char*)p->tf->esp) = "100";
+        // strncpy((char*)(p->tf->esp),msg,4);
+        // cprintf("SCHEDULER: %d %s\n",p->tf->esp,(char*)(p->tf->esp));
+        p->tf->esp -= 4;
+
+        cprintf("SCHEDULER%d: p->tf->esp %d After Setting to new val\n",p->pid,p->tf->esp);
+        cprintf("SCHEDULER%d: p->tf->eip %d After Setting to interruptHandler\n",p->pid,p->tf->eip);
+
+      } 
+
       p->state = RUNNING;
 
       swtch(&(c->scheduler), p->context);
@@ -548,20 +572,13 @@ procdump(void)
 }
 
 void
-block(int pid)
+block()
 {
-  struct proc *p;
-
+  struct proc *p = myproc();
   acquire(&ptable.lock);
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->pid == pid){
-      p->state = SLEEPING;
-      release(&ptable.lock);
-      return;
-    }
-  }
+  p->state = SLEEPING;
+  sched();
   release(&ptable.lock);
-  return;
 }
 
 void
@@ -580,4 +597,33 @@ unblock(int pid)
   }
   release(&ptable.lock);
   return;
+}
+
+void
+registerI(int pid,uint func)
+{
+  interruptHandlers[pid] = func;
+}
+
+void
+callInterrupt(int pid,void* msg)
+{
+  acquire(&ptable.lock);
+  sendInterruptSignal[pid] = 1;
+  release(&ptable.lock);
+}
+
+void
+return_to_kernel(int pid)
+{
+  struct proc *p = myproc();
+
+  cprintf("return_to_kernel: PID %d clearing interrupt signal\n",pid);
+  acquire(&ptable.lock);
+  
+  sendInterruptSignal[p->pid] = 0;
+  memmove(p->tf,&(trapframeBackups[p->pid]),sizeof(struct trapframe));
+
+  cprintf("SCHEDULER%d: p->tf->eip %d After restore\n",myproc()->pid,myproc()->tf->eip);
+  release(&ptable.lock);
 }

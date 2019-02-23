@@ -109,6 +109,9 @@ extern int sys_add(void);
 extern int sys_ps(void);
 extern int sys_send(void);
 extern int sys_recv(void);
+extern int sys_registerI(void);
+extern int sys_send_multi(void);
+extern int sys_return_to_kernel(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -138,6 +141,9 @@ static int (*syscalls[])(void) = {
 [SYS_ps]  sys_ps,
 [SYS_send]  sys_send,
 [SYS_recv]  sys_recv,
+[SYS_registerI]  sys_registerI,
+[SYS_send_multi]  sys_send_multi,
+[SYS_return_to_kernel]  sys_return_to_kernel,
 };
 
 char *sys_call_names[] = {
@@ -168,6 +174,9 @@ char *sys_call_names[] = {
 [SYS_ps]   "sys_ps",
 [SYS_send]   "sys_send",
 [SYS_recv]   "sys_recv",
+[SYS_registerI]  "sys_registerI",
+[SYS_send_multi]  "sys_send_multi",
+[SYS_return_to_kernel]  "sys_return_to_kernel",
 };
 
 int alphabetical_mapping[] = {
@@ -190,8 +199,11 @@ SYS_print_count,
 SYS_ps,
 SYS_read,
 SYS_recv,
+SYS_registerI,
+SYS_return_to_kernel,
 SYS_sbrk,
 SYS_send,
+SYS_send_multi,
 SYS_sleep,
 SYS_toggle,
 SYS_unlink,
@@ -332,7 +344,7 @@ int sys_send(void) {
 
   int sender_pid;
   int rec_pid;
-  char* msg;
+  void* msg;
 
   if(argint(0,&sender_pid) <0) {
     return -1;
@@ -342,7 +354,7 @@ int sys_send(void) {
     return -1;
   }
 
-  if(argptr(2,(void*)&msg, sizeof(char*)) <0) {
+  if(argptr(2,(void*)&msg, sizeof(void*)) <0) {
     return -1;
   }
 
@@ -359,7 +371,7 @@ int sys_send(void) {
       
       insert(&msgQ[rec_pid],new_msg);
 
-      // unblock(rec_pid);
+      unblock(rec_pid);
       break;
     }
   }
@@ -379,23 +391,21 @@ int sys_recv(void) {
 
   int myid;
   int *from;
-  char *msg;
+  void *msg;
 
   myid = myproc()->pid;
   
-  if(argptr(0,(void*)&msg,sizeof(char*))<0) {
+  if(argptr(0,(void*)&msg,sizeof(void*))<0) {
     return -1;
   }
 
   struct msg* msg_obj = remov(&msgQ[myid]);
 
   if(msg_obj == 0) {
-    // block(myid);
-    // sched();
-    // msg_obj = remov(&msgQ[myid]);
-
-    return -1;
+    block();
+    msg_obj = remov(&msgQ[myid]);
   }
+  
 
   strncpy(msg,(*msg_obj).msg,MSGSIZE);
   *from = (*msg_obj).sender_pid;

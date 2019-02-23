@@ -26,3 +26,6 @@
 #define SYS_ps  25
 #define SYS_send  26
 #define SYS_recv  27
+#define SYS_registerI  28
+#define SYS_send_multi  29
+#define SYS_return_to_kernel  30

@@ -29,6 +29,9 @@ int add(int n1,int n2);
 int ps(void);
 int send(int sender_pid,int rec_pid, void* msg);
 int recv(void *msg);
+int registerI(void (*f)(void*));
+int send_multi( int sender_pid, int rec_pids[], void* msg, int length);
+int return_to_kernel(void);
 
 // ulib.c
 int stat(const char*, struct stat*);

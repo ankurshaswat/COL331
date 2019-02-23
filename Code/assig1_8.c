@@ -1,6 +1,11 @@
 #include "types.h"
 #include "stat.h"
 #include "user.h"
+     
+float mean = -1;
+void signal_handler(void*msg) {
+    printf(1,"In signal handler of %d\n",getpid());
+}
 
 int
 main(int argc, char *argv[])
@@ -32,23 +37,29 @@ main(int argc, char *argv[])
   
   	//----FILL THE CODE HERE for unicast sum and multicast variance
 
+    registerI(signal_handler);
+    
     int num_proc = 2;
+    int thread_ids[num_proc-1];
     int master_thread = getpid();
-
     int tid=0;
-
     int pid;
     
     for(int i=1;i<num_proc;i++) {
         tid = i;
         pid = fork();
         
-        if(pid==0) { // child process
+        if(pid==0) { 
+            // child process
+            registerI(signal_handler);
             break;
+        } else {
+            thread_ids[i-1] = pid;
         }
     }
 
-    if(pid != 0) { // master thread has tid=0
+    if(pid != 0) { 
+        // master thread has tid=0
         tid = 0;
     }
     int num_items_to_process;
@@ -65,21 +76,58 @@ main(int argc, char *argv[])
 
     if(pid == 0) {
         send(getpid(),master_thread,&local_sum);
-        exit();
-    }
-        
-    int count =1;
-    while(count < num_proc) {
-		int msg;
-        int res = recv(&msg);
+        if(type==0) {
+            exit();
+        }
+    } else {
+        int count =1;
+        while(count < num_proc) {
+            int msg;
+            int res = recv(&msg);
 
-        if(res>=0) {
-            count++;
-			local_sum += (msg);
-            // add msg to local sum
+            if(res>=0) {
+                count++;
+                local_sum += (msg);
+            }
+        }
+        tot_sum = local_sum;
+
+        if(type!=0) {
+            mean = (tot_sum*1.0) / size;
+            send_multi(master_thread,thread_ids,&mean,num_proc-1);
+            // for(int i=0;i<num_proc-1;i++) {
+            //         send(getpid(),thread_ids[i],&mean);
+            // }
         }
     }
-    tot_sum = local_sum;
+    
+    if(type!=0) {
+        // if(pid == 0) {
+        //     recv(&mean);
+        // }
+        while(mean < -1) {
+        }
+        float local_variance = 0;
+        for(int i=tid*num_items_to_process;i<(tid+1)*num_items_to_process && i<size;i++) {
+            local_variance += (arr[i]-mean)*(arr[i]-mean);
+        }
+        if(pid==0) {
+            send(getpid(),master_thread,&local_variance);
+            exit();
+        }
+
+        int count =1;
+        while(count < num_proc) {
+            float msg;
+            int res = recv(&msg);
+
+            if(res>=0) {
+                count++;
+                local_variance += (msg);
+            }
+        }
+        variance = local_variance/size;
+    }
 
   	//------------------
 

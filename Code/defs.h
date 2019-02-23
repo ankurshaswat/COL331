@@ -121,8 +121,11 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
-void            block(int);
+void            block(void);
 void            unblock(int);
+void            registerI(int,uint);
+void            callInterrupt(int pid,void* msg);
+void            return_to_kernel(int pid);
 
 // swtch.S
 void            swtch(struct context**, struct context*);

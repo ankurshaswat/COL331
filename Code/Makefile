@@ -181,8 +181,7 @@ UPROGS=\
 	_usertests\
 	_wc\
 	_zombie\
-	_user_toggle\
-	_print_count\
+	_user_test\
 	_assig1_1\
 	_assig1_2\
 	_assig1_3\
@@ -192,8 +191,8 @@ UPROGS=\
 	_assig1_7\
 	_assig1_8\
 
-fs.img: mkfs README arr.txt $(UPROGS)
-	./mkfs fs.img README arr.txt $(UPROGS)
+fs.img: mkfs README arr $(UPROGS)
+	./mkfs fs.img README arr $(UPROGS)
 
 -include *.d
 
@@ -258,15 +257,7 @@ qemu-nox-gdb: fs.img xv6.img .gdbinit
 # check in that version.
 
 EXTRA=\
-	assig1_1.c\
-	assig1_2.c\
-	assig1_3.c\
-	assig1_4.c\
-	assig1_5.c\
-	assig1_6.c\
-	assig1_7.c\
-	assig1_8.c\
-	user_toggle.c print_count.c\
+	user_test.c assig1_1.c assig1_2.c assig1_3.c assig1_4.c assig1_5.c assig1_6.c assig1_7.c assig1_8.c \
 	mkfs.c ulib.c user.h cat.c echo.c forktest.c grep.c kill.c\
 	ln.c ls.c mkdir.c rm.c stressfs.c usertests.c wc.c zombie.c\
 	printf.c umalloc.c\
