@@ -371,7 +371,7 @@ int sys_send(void) {
       
       insert(&msgQ[rec_pid],new_msg);
 
-      unblock(rec_pid);
+      // unblock(rec_pid);
       break;
     }
   }
@@ -390,7 +390,6 @@ int sys_recv(void) {
   }
 
   int myid;
-  int *from;
   void *msg;
 
   myid = myproc()->pid;
@@ -402,13 +401,13 @@ int sys_recv(void) {
   struct msg* msg_obj = remov(&msgQ[myid]);
 
   if(msg_obj == 0) {
-    block();
+    // block();
+    return -1;
     msg_obj = remov(&msgQ[myid]);
   }
-  
 
   strncpy(msg,(*msg_obj).msg,MSGSIZE);
-  *from = (*msg_obj).sender_pid;
+  return 0;
 
   bufferAllocated[msg_obj->bufferPosition] = 0;
 

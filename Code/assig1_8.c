@@ -3,8 +3,9 @@
 #include "user.h"
      
 float mean = -1;
+
 void signal_handler(void*msg) {
-    printf(1,"In signal handler of %d\n",getpid());
+    mean = *((float*)msg);
 }
 
 int
@@ -55,13 +56,10 @@ main(int argc, char *argv[])
             break;
         } else {
             thread_ids[i-1] = pid;
+            tid = 0;
         }
     }
 
-    if(pid != 0) { 
-        // master thread has tid=0
-        tid = 0;
-    }
     int num_items_to_process;
     if(size%num_proc == 0) {
         num_items_to_process = size / num_proc;
@@ -82,30 +80,29 @@ main(int argc, char *argv[])
     } else {
         int count =1;
         while(count < num_proc) {
-            int msg;
-            int res = recv(&msg);
+		    int *msg = (int *)malloc(MSGSIZE);
 
+            int res = recv(msg);
+            
             if(res>=0) {
                 count++;
-                local_sum += (msg);
+                local_sum += *(msg);
             }
         }
+
         tot_sum = local_sum;
 
         if(type!=0) {
             mean = (tot_sum*1.0) / size;
             send_multi(master_thread,thread_ids,&mean,num_proc-1);
-            // for(int i=0;i<num_proc-1;i++) {
-            //         send(getpid(),thread_ids[i],&mean);
-            // }
         }
     }
     
     if(type!=0) {
-        // if(pid == 0) {
-        //     recv(&mean);
-        // }
-        while(mean < -1) {
+        while(1) {
+            if(mean>=0){
+                break;
+            }
         }
         float local_variance = 0;
         for(int i=tid*num_items_to_process;i<(tid+1)*num_items_to_process && i<size;i++) {

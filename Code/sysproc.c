@@ -131,6 +131,10 @@ sys_send_multi(void) {
   }
 
   for(int i=0;i<length;i++) {
+    cprintf("pid of child %d\n",rec_pids[i]);
+  }
+
+  for(int i=0;i<length;i++) {
     int rec_pid = rec_pids[i];
     callInterrupt(rec_pid,msg);
     cprintf("SYS_send_multi: Interrupt called for %d\n",rec_pid);

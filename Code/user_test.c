@@ -7,8 +7,8 @@ int x = 1;
 void
 interruptHandler(void* msg) 
 {
-    printf(1,"UPROG%d: Process in interruptHandler. Parameter Val = %d %d \n",getpid(),&msg,msg);   
-    x = (int)msg;
+    x = *((int*)msg);
+    printf(1,"UPROG%d: Process in interruptHandler. Parameter Val = %d %d \n",getpid(),&msg,*((int*)msg));   
     return_to_kernel();
 }
 
@@ -26,7 +26,8 @@ main(void)
         int a[1];
         a[0] = master;
         printf(1,"UPROG%d: Sending multicast message\n",getpid());
-        send_multi(getpid(),a,"Hi",1);
+        int mean = 103;
+        send_multi(getpid(),a,&mean,1);
         exit();
     }
 
