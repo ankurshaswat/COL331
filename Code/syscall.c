@@ -291,9 +291,6 @@ struct msg {
   struct msg *next;
 };
 
-struct msg msgBuffer[256];
-int bufferAllocated[256] = {0};
-
 struct queue
 {
     struct msg *head;
@@ -330,6 +327,9 @@ struct msg* remov(struct queue* q) {
     return m;
   }
 }
+
+struct msg msgBuffer[256];
+int bufferAllocated[256] = {0};
 
 struct queue msgQ[NPROC];
 int initQ = 0;  
@@ -371,7 +371,7 @@ int sys_send(void) {
       
       insert(&msgQ[rec_pid],new_msg);
 
-      // unblock(rec_pid);
+      unblock(rec_pid);
       break;
     }
   }
@@ -401,8 +401,8 @@ int sys_recv(void) {
   struct msg* msg_obj = remov(&msgQ[myid]);
 
   if(msg_obj == 0) {
-    // block();
-    return -1;
+    block();
+    // return -1;
     msg_obj = remov(&msgQ[myid]);
   }
 

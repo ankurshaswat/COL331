@@ -361,23 +361,17 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
 
-      if(sendInterruptSignal[p->pid] == 1 && interruptHandlers[p->pid]!=-1)  {
+      if(sendInterruptSignal[p->pid] == 1 )  {
         sendInterruptSignal[p->pid] = 0;
         memmove(&(trapframeBackups[p->pid]),p->tf ,sizeof(struct trapframe));
         p->tf->eip = interruptHandlers[p->pid];
         p->tf->esp -= 4;
         p->tf->esp -= MSGSIZE;
-        // char msg[8] = "hey";
         strncpy((char*)(p->tf->esp),msgBackups[p->pid],MSGSIZE);
         p->tf->esp -= 4;
         *((int*)p->tf->esp) = p->tf->esp + 4;
-        // cprintf("SCHEDULER: %d %s\n",p->tf->esp,(char*)(p->tf->esp));
         p->tf->esp -= 4;
-
-        cprintf("SCHEDULER%d: p->tf->esp %d After Setting to new val\n",p->pid,p->tf->esp);
-        cprintf("SCHEDULER%d: p->tf->eip %d After Setting to interruptHandler\n",p->pid,p->tf->eip);
-
-      } 
+      }
 
       p->state = RUNNING;
 
@@ -618,13 +612,8 @@ void
 return_to_kernel(int pid)
 {
   struct proc *p = myproc();
-
-  cprintf("return_to_kernel: PID %d clearing interrupt signal\n",pid);
   acquire(&ptable.lock);
-  
   sendInterruptSignal[p->pid] = 0;
   memmove(p->tf,&(trapframeBackups[p->pid]),sizeof(struct trapframe));
-
-  cprintf("SCHEDULER%d: p->tf->eip %d After restore\n",myproc()->pid,myproc()->tf->eip);
   release(&ptable.lock);
 }

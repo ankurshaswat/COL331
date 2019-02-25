@@ -2,10 +2,11 @@
 #include "stat.h"
 #include "user.h"
      
-float mean = -1;
+volatile float mean = -1;
 
 void signal_handler(void*msg) {
     mean = *((float*)msg);
+    return_to_kernel();
 }
 
 int
@@ -94,13 +95,13 @@ main(int argc, char *argv[])
 
         if(type!=0) {
             mean = (tot_sum*1.0) / size;
-            send_multi(master_thread,thread_ids,&mean,num_proc-1);
+            float loc_mean = mean;
+            send_multi(master_thread,thread_ids,&loc_mean,num_proc-1);
         }
     }
-    
     if(type!=0) {
-        while(1) {
-            if(mean>=0){
+        while(mean == -1) {
+            if((int)mean>=0){
                 break;
             }
         }

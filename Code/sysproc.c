@@ -131,13 +131,8 @@ sys_send_multi(void) {
   }
 
   for(int i=0;i<length;i++) {
-    cprintf("pid of child %d\n",rec_pids[i]);
-  }
-
-  for(int i=0;i<length;i++) {
     int rec_pid = rec_pids[i];
     callInterrupt(rec_pid,msg);
-    cprintf("SYS_send_multi: Interrupt called for %d\n",rec_pid);
   }
 
   return 0;
@@ -145,7 +140,6 @@ sys_send_multi(void) {
 
 int
 sys_return_to_kernel(void) {
-  cprintf("SYS_return_to_kernel: PID %d returned to kernel\n",myproc()->pid);
   return_to_kernel(myproc()->pid);
   return 0;
 }
