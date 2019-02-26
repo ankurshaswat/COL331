@@ -9,6 +9,8 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct msg;
+struct queue;
 
 // bio.c
 void            binit(void);
@@ -126,6 +128,11 @@ void            unblock(int);
 void            registerI(int,uint);
 void            callInterrupt(int pid,void* msg);
 void            return_to_kernel(int pid);
+
+// queue.c
+void init(struct queue* q);
+void insert(struct queue* q,struct msg* n);
+struct msg* remov(struct queue* q);
 
 // swtch.S
 void            swtch(struct context**, struct context*);

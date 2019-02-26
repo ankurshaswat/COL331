@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "queue.h"
 
 struct {
   struct spinlock lock;
@@ -16,6 +17,12 @@ int sendInterruptSignal[NPROC] = {0};
 uint interruptHandlers[NPROC] = {-1};
 struct trapframe trapframeBackups[NPROC];
 char msgBackups[NPROC][MSGSIZE];
+
+struct msg msgBufferI[256];
+int bufferAllocatedI[256] = {0};
+
+struct spinlock msgQLocks[NPROC];
+struct queue msgQ[NPROC];
 
 static struct proc *initproc;
 
@@ -43,6 +50,12 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+  for(int i=0;i<NPROC;i++) {
+    initlock(&(msgQLocks[i]),"msgQLocks");
+  }
+  for(int i=0;i<NPROC;i++) {
+    init(&msgQ[i]);
+  }
 }
 
 // Must be called with interrupts disabled
@@ -360,18 +373,26 @@ scheduler(void)
       // before jumping back to us.
       c->proc = p;
       switchuvm(p);
-
-      if(sendInterruptSignal[p->pid] == 1 )  {
-        sendInterruptSignal[p->pid] = 0;
-        memmove(&(trapframeBackups[p->pid]),p->tf ,sizeof(struct trapframe));
-        p->tf->eip = interruptHandlers[p->pid];
-        p->tf->esp -= 4;
-        p->tf->esp -= MSGSIZE;
-        strncpy((char*)(p->tf->esp),msgBackups[p->pid],MSGSIZE);
-        p->tf->esp -= 4;
-        *((int*)p->tf->esp) = p->tf->esp + 4;
-        p->tf->esp -= 4;
+        
+      acquire(&msgQLocks[p->pid]);
+      if(sendInterruptSignal[p->pid] == 1)  {
+        struct msg* msg_obj = remov(&msgQ[p->pid]);
+        if(msg_obj==0) {
+          sendInterruptSignal[p->pid]= 0;
+        } else {
+          sendInterruptSignal[p->pid] = 2;
+          memmove(&(trapframeBackups[p->pid]),p->tf ,sizeof(struct trapframe));
+          p->tf->eip = interruptHandlers[p->pid];
+          p->tf->esp -= 4;
+          p->tf->esp -= MSGSIZE;
+          strncpy((char*)(p->tf->esp),msg_obj->msg,MSGSIZE);
+          // strncpy((char*)(p->tf->esp),msgBackups[p->pid],MSGSIZE);
+          p->tf->esp -= 4;
+          *((int*)p->tf->esp) = p->tf->esp + 4;
+          p->tf->esp -= 4;
+        }
       }
+      release(&msgQLocks[p->pid]);
 
       p->state = RUNNING;
 
@@ -518,6 +539,8 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
+      interruptHandlers[pid] = -1;
+
       if(p->state == SLEEPING)
         p->state = RUNNABLE;
       release(&ptable.lock);
@@ -602,10 +625,25 @@ registerI(int pid,uint func)
 void
 callInterrupt(int pid,void* msg)
 {
-  acquire(&ptable.lock);
-  strncpy(msgBackups[pid],msg,MSGSIZE);
-  sendInterruptSignal[pid] = 1;
-  release(&ptable.lock);
+  acquire(&msgQLocks[pid]);
+  struct msg* new_msg;
+  for(int i=0;i<NELEM(msgBufferI);i++) {
+    if(bufferAllocatedI[i] == 0) {
+      bufferAllocatedI[i] = 1;
+      new_msg = &msgBufferI[i];
+      
+      new_msg->bufferPosition = i;
+      strncpy(new_msg->msg,msg,MSGSIZE);
+      new_msg->next = 0;
+      insert(&msgQ[pid],new_msg);
+      break;
+    }
+  }
+  // strncpy(msgBackups[pid],msg,MSGSIZE);
+  if(sendInterruptSignal[pid] == 0) {
+    sendInterruptSignal[pid] =1;
+  }
+  release(&msgQLocks[pid]);
 }
 
 void
@@ -613,7 +651,11 @@ return_to_kernel(int pid)
 {
   struct proc *p = myproc();
   acquire(&ptable.lock);
-  sendInterruptSignal[p->pid] = 0;
+  acquire(&msgQLocks[pid]);
+
+  sendInterruptSignal[p->pid] = 1;
   memmove(p->tf,&(trapframeBackups[p->pid]),sizeof(struct trapframe));
+  
+  release(&msgQLocks[pid]);  
   release(&ptable.lock);
 }

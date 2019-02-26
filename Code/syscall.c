@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "x86.h"
 #include "syscall.h"
+#include "queue.h"
 
 // User code makes a system call with INT T_SYSCALL.
 // System call number in %eax.
@@ -284,49 +285,6 @@ sys_print_count(void)
  * 
 */
 
-struct msg {
-  int sender_pid;
-  char msg[8];
-  int bufferPosition;
-  struct msg *next;
-};
-
-struct queue
-{
-    struct msg *head;
-    struct msg *tail;
-};
-
-void init(struct queue* q) {
-  q->head = 0;
-  q->tail = 0;
-}
-
-void insert(struct queue* q,struct msg* n) {
-  n->next = 0;
-  if(q->head == 0) {
-    q->head = n;
-    q->tail = n;
-  } else {
-    q->tail->next = n;
-    q->tail = n;
-  }
-}
-
-struct msg* remov(struct queue* q) {
-  if(q->head==0) {
-    return 0;
-  } else {
-    struct msg* m = q->head;
-    if(q->head == q->tail) {
-      q->head = 0;
-      q->tail =0;
-    } else {
-      q->head = q->head->next;
-    }
-    return m;
-  }
-}
 
 struct msg msgBuffer[256];
 int bufferAllocated[256] = {0};
