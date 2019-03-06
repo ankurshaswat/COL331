@@ -132,6 +132,9 @@ sys_send_multi(void) {
 
   for(int i=0;i<length;i++) {
     int rec_pid = rec_pids[i];
+    if(rec_pid == myproc()->pid) {
+      continue;
+    }
     callInterrupt(rec_pid,msg);
   }
 

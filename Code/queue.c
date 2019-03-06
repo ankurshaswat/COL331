@@ -35,7 +35,7 @@ remov(struct queue* q) {
     struct msg* m = q->head;
     if(q->head == q->tail) {
       q->head = 0;
-      q->tail =0;
+      q->tail = 0;
     } else {
       q->head = q->head->next;
     }

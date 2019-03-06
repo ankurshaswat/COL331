@@ -22,7 +22,7 @@ struct msg msgBufferI[256];
 int bufferAllocatedI[256] = {0};
 
 struct spinlock msgQLocks[NPROC];
-struct queue msgQ[NPROC];
+struct queue msgQs[NPROC];
 
 static struct proc *initproc;
 
@@ -54,7 +54,7 @@ pinit(void)
     initlock(&(msgQLocks[i]),"msgQLocks");
   }
   for(int i=0;i<NPROC;i++) {
-    init(&msgQ[i]);
+    init(&msgQs[i]);
   }
 }
 
@@ -376,7 +376,7 @@ scheduler(void)
         
       acquire(&msgQLocks[p->pid]);
       if(sendInterruptSignal[p->pid] == 1)  {
-        struct msg* msg_obj = remov(&msgQ[p->pid]);
+        struct msg* msg_obj = remov(&msgQs[p->pid]);
         if(msg_obj==0) {
           sendInterruptSignal[p->pid]= 0;
         } else {
@@ -385,8 +385,8 @@ scheduler(void)
           p->tf->eip = interruptHandlers[p->pid];
           p->tf->esp -= 4;
           p->tf->esp -= MSGSIZE;
-          strncpy((char*)(p->tf->esp),msg_obj->msg,MSGSIZE);
-          // strncpy((char*)(p->tf->esp),msgBackups[p->pid],MSGSIZE);
+          memmove((void*)(p->tf->esp),msg_obj->msg,MSGSIZE);
+          bufferAllocatedI[msg_obj->bufferPosition] = 0;
           p->tf->esp -= 4;
           *((int*)p->tf->esp) = p->tf->esp + 4;
           p->tf->esp -= 4;
@@ -633,13 +633,12 @@ callInterrupt(int pid,void* msg)
       new_msg = &msgBufferI[i];
       
       new_msg->bufferPosition = i;
-      strncpy(new_msg->msg,msg,MSGSIZE);
+      memmove(new_msg->msg,msg,MSGSIZE);
       new_msg->next = 0;
-      insert(&msgQ[pid],new_msg);
+      insert(&msgQs[pid],new_msg);
       break;
     }
   }
-  // strncpy(msgBackups[pid],msg,MSGSIZE);
   if(sendInterruptSignal[pid] == 0) {
     sendInterruptSignal[pid] =1;
   }
