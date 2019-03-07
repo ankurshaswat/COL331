@@ -123,7 +123,7 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
-void            block(void);
+void            block(struct spinlock *lk);
 void            unblock(int);
 void            registerI(int,uint);
 void            callInterrupt(int pid,void* msg);

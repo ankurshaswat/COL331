@@ -25,11 +25,20 @@ insert(struct queue* q,struct msg* n) {
     q->tail->next = n;
     q->tail = n;
   }
+  // cprintf("Inserting ");
+  // struct msg* t = q->head;
+  // while(t != 0) {
+  //   cprintf("%d->",t->bufferPosition);
+  //   t = t->next;
+  // }
+  // cprintf("\n");
+
 }
 
 struct msg*
 remov(struct queue* q) {
   if(q->head==0) {
+    // cprintf("Nothing \n");
     return 0;
   } else {
     struct msg* m = q->head;
@@ -39,6 +48,19 @@ remov(struct queue* q) {
     } else {
       q->head = q->head->next;
     }
+
+    // cprintf("Removing ");
+    // cprintf("%d->",m->bufferPosition);
+    // struct msg* t = q->head;
+    // while(t != 0) {
+    //   cprintf("%d->",t->bufferPosition);
+    //   t = t->next;
+    // }
+    // cprintf("\n");
+
+  
     return m;
   }
+
+  
 }

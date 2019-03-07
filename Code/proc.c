@@ -589,11 +589,27 @@ procdump(void)
 }
 
 void
-block()
+mark_block()
 {
   struct proc *p = myproc();
   acquire(&ptable.lock);
   p->state = SLEEPING;
+}
+
+void
+go_to_sched()
+{
+  sched();
+  release(&ptable.lock);
+}
+
+void
+block(struct spinlock *lk)
+{
+  struct proc *p = myproc();
+  acquire(&ptable.lock);
+  p->state = SLEEPING;
+  release(lk);
   sched();
   release(&ptable.lock);
 }
@@ -612,8 +628,9 @@ unblock(int pid)
       return;
     }
   }
-  release(&ptable.lock);
-  return;
+  panic("No such process\n");
+  // release(&ptable.lock);
+  // return;
 }
 
 void

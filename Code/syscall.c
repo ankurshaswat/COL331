@@ -297,7 +297,7 @@ int initQ = 0;
 int sys_send(void) {
   if(initQ == 0) {
           for(int i=0;i<NPROC;i++) {
-    initlock(&(msgQLocks1[i]),"msgQLocks");
+    initlock(&(msgQLocks1[i]),"msgQLocks1");
   }
     for(int i=0;i<NPROC;i++) {
       init(&msgQ[i]);
@@ -331,23 +331,25 @@ int sys_send(void) {
       new_msg->sender_pid = sender_pid;
       memmove(new_msg->msg,msg,MSGSIZE);
       new_msg->next = 0;
+
+      // cprintf("%d\n",rec_pid);
       acquire(&msgQLocks1[rec_pid]);
       insert(&msgQ[rec_pid],new_msg);
       unblock(rec_pid);
+      
       release(&msgQLocks1[rec_pid]);
-      break;
+      return 0;
     }
   }
 
-
-  return 0;
+  panic("No Free Buffer\n");
 
 }
 
 int sys_recv(void) {
   if(initQ == 0) {
       for(int i=0;i<NPROC;i++) {
-    initlock(&(msgQLocks1[i]),"msgQLocks");
+    initlock(&(msgQLocks1[i]),"msgQLocks1");
   }
     for(int i=0;i<NPROC;i++) {
       init(&msgQ[i]);
@@ -366,15 +368,15 @@ int sys_recv(void) {
 
   acquire(&msgQLocks1[myid]);
   struct msg* msg_obj = remov(&msgQ[myid]);
-  release(&msgQLocks1[myid]);
   if(msg_obj == 0) {
-    block();
+    block(&msgQLocks1[myid]);
+
     acquire(&msgQLocks1[myid]);    
     msg_obj = remov(&msgQ[myid]);
-    release(&msgQLocks1[myid]);
   } 
+  release(&msgQLocks1[myid]);
 
-  memmove(msg,(*msg_obj).msg,MSGSIZE);
+  memmove(msg,msg_obj->msg,MSGSIZE);
 
   bufferAllocated[msg_obj->bufferPosition] = 0;
 
