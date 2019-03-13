@@ -5,7 +5,7 @@
 #define N 11
 #define E 0.00001
 #define T 100.0
-#define P 2
+#define P 6
 #define L 20000
 
 struct point_value
@@ -19,13 +19,13 @@ volatile float diff = 0.0;
 
 volatile int paused = 0;
 
-void increase_pause(void * msg) {
-    paused++;
+void unblocker(void *msg) {
+    diff = *((float*)msg);
     return_to_kernel();
 }
 
-void unblocker(void *msg) {
-    diff = *((float*)msg);
+void increase_pause(void * msg) {
+    paused++;
     return_to_kernel();
 }
 
@@ -52,11 +52,34 @@ float max(float a,float b) {
 int main(int argc, char *argv[])
 {
 	int i,j;
+    int vals_with_me;
+    int tid=0;
+    int pid_below = -1;
+    int pid_above = -1;
+    int pid=-1;
+	int count=0;
+    int pids[P];
+    int size = N-2;
+    int num_items_to_process = size/P; 
+    int extra_items = size%P;
+    int range_start = 0;
+    int range_end = 0;
+    int receive_count;
+    int index;
+    int my_pid = getpid();
+
 	float mean;
 	float u[N][N];
 	float w[N][N];
+    float local_diff;
+    float value;
 
-	int count=0;
+	void *msg_space = malloc(MSGSIZE);
+
+    struct point_value point_val;
+
+    pids[0] = my_pid;
+
 	mean = 0.0;
 	for (i = 0; i < N; i++){
 		u[i][0] = u[i][N-1] = u[0][i] = T;
@@ -65,16 +88,7 @@ int main(int argc, char *argv[])
 	}
 	mean /= (4.0 * N);
 
-    int pids[P];
-    pids[0] = getpid();
-
-    int tid=0;
-    int pid=-1;
-    int pid_above = -1;
-    int pid_below = -1;
-    int my_pid = pids[0];
-
-    for(int i=1;i<P;i++) {
+    for(i=1;i<P;i++) {
         tid = i;
         pid = fork();
 
@@ -100,20 +114,10 @@ int main(int argc, char *argv[])
         send(my_pid,pids[tid-1],&my_pid);
     }
 
-	void *msg_space = malloc(MSGSIZE);
-
     if(tid < P - 1) {
         recv(msg_space);
         pid_below = *((int*)msg_space);
     }
-
-    int size = N-2;
-
-    int num_items_to_process = size/P; 
-    int extra_items = size%P;
-
-    int range_start = 0;
-    int range_end = 0;
 
     if(tid+1 <= extra_items) {
         range_start = tid*(num_items_to_process+1);
@@ -125,20 +129,8 @@ int main(int argc, char *argv[])
 
     range_start++;
 
-	for (i = range_start; i <= range_end; i++ )
+	for (i = 1; i <= N-2; i++ )
 		for ( j= 1; j < N-1; j++) u[i][j] = mean;
-
-    struct point_value point_val;
-
-    // int loop_num = 0;
-    float local_diff;
-    float received_diff;
-    float new_diff;
-	int loc_count;
-    int receive_count;
-    int index;
-    float value;
-    float old_diff;
 
     for(;;){
         if(tid==0) {
@@ -148,8 +140,7 @@ int main(int argc, char *argv[])
 		diff = 0.0;
 		for(i =range_start ; i <= range_end; i++){
 			for(j =1 ; j < N-1; j++){
-				w[i][j] = ( u[i-1][j] + u[i+1][j]+
-					    u[i][j-1] + u[i][j+1])/4.0;
+				w[i][j] = ( u[i-1][j] + u[i+1][j]+ u[i][j-1] + u[i][j+1])/4.0;
 				if( fabsm(w[i][j] - u[i][j]) > diff )
 					diff = fabsm(w[i][j]- u[i][j]);	
 			}
@@ -163,15 +154,15 @@ int main(int argc, char *argv[])
             while(diff<0.0) {
             }
         } else {
-            loc_count = 1;
-            while(loc_count<P) {
+            receive_count = 1;
+            while(receive_count<P) {
                 recv(msg_space);
-                received_diff = *((float*)msg_space);
-                diff = max(received_diff,diff);
-                loc_count++;
+                local_diff = *((float*)msg_space);
+                diff = max(local_diff,diff);
+                receive_count++;
             }
-            new_diff = diff;
-            send_multi(my_pid,pids,&new_diff,P);
+            local_diff = diff;
+            send_multi(my_pid,pids,&local_diff,P);
         }
 
 	    count++;
@@ -212,9 +203,6 @@ int main(int argc, char *argv[])
             point_val = *((struct point_value*)msg_space);
             index = point_val.index ;
             value = point_val.value;
-            // if(my_pid==4) {
-            //     printf(1,"%d %d\n",index/N,index%N);
-            // }
             u[index/N][index%N] = value;
             receive_count--;
         }
@@ -225,12 +213,12 @@ int main(int argc, char *argv[])
             while(paused < P-1){
             }
             paused = 0;
-            new_diff = diff;
-            send_multi(my_pid,pids,&new_diff,P);
+            local_diff = diff;
+            send_multi(my_pid,pids,&local_diff,P);
         } else {
-            old_diff = diff;
+            local_diff = diff;
             diff = -1;
-            send_multi(my_pid,pids,&old_diff,1);
+            send_multi(my_pid,pids,&local_diff,1);
             while(diff<0.0) {
             }
         }
@@ -252,23 +240,22 @@ int main(int argc, char *argv[])
         exit();
     }
 
-    int num_joined = 1;
-    while(num_joined < P) {
+    receive_count = 1;
+    while(receive_count < P) {
         wait();
-        num_joined++;
+        receive_count++;
     }
 
-    int vals_with_me = (range_end-range_start+1)*(N-2);
+    vals_with_me = (range_end-range_start+1)*(N-2);
+    receive_count = (N-2)*(N-2) - vals_with_me;
 
-    int num_vals_to_receive = (N-2)*(N-2) - vals_with_me;
-
-    while(num_vals_to_receive >0) {
+    while(receive_count >0) {
         recv(msg_space);
         point_val = *((struct point_value*)msg_space);
         index = point_val.index ;
         value = point_val.value;
         u[index/N][index%N] = value;
-        num_vals_to_receive--;
+        receive_count--;
     }
 
 

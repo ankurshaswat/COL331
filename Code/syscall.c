@@ -290,15 +290,17 @@ sys_print_count(void)
 struct msg msgBuffer[256];
 int bufferAllocated[256] = {0};
 struct spinlock msgQLocks1[NPROC];
+struct spinlock bufferLock;
 
 struct queue msgQ[NPROC];
 int initQ = 0;  
 
 int sys_send(void) {
   if(initQ == 0) {
-          for(int i=0;i<NPROC;i++) {
-    initlock(&(msgQLocks1[i]),"msgQLocks1");
-  }
+    for(int i=0;i<NPROC;i++) {
+      initlock(&(msgQLocks1[i]),"msgQLocks1");
+      initlock(&bufferLock,"bufferLock");
+    }
     for(int i=0;i<NPROC;i++) {
       init(&msgQ[i]);
     }
@@ -322,9 +324,11 @@ int sys_send(void) {
   }
 
   struct msg* new_msg;
+  acquire(&bufferLock);
   for(int i=0;i<NELEM(msgBuffer);i++) {
     if(bufferAllocated[i] == 0) {
       bufferAllocated[i] = 1;
+      release(&bufferLock);
       new_msg = &msgBuffer[i];
       
       new_msg->bufferPosition = i;
@@ -332,7 +336,6 @@ int sys_send(void) {
       memmove(new_msg->msg,msg,MSGSIZE);
       new_msg->next = 0;
 
-      // cprintf("%d\n",rec_pid);
       acquire(&msgQLocks1[rec_pid]);
       insert(&msgQ[rec_pid],new_msg);
       unblock(rec_pid);
@@ -348,9 +351,10 @@ int sys_send(void) {
 
 int sys_recv(void) {
   if(initQ == 0) {
-      for(int i=0;i<NPROC;i++) {
-    initlock(&(msgQLocks1[i]),"msgQLocks1");
-  }
+    for(int i=0;i<NPROC;i++) {
+      initlock(&(msgQLocks1[i]),"msgQLocks1");
+      initlock(&bufferLock,"bufferLock");
+    }
     for(int i=0;i<NPROC;i++) {
       init(&msgQ[i]);
     }

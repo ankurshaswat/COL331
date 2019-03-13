@@ -589,21 +589,6 @@ procdump(void)
 }
 
 void
-mark_block()
-{
-  struct proc *p = myproc();
-  acquire(&ptable.lock);
-  p->state = SLEEPING;
-}
-
-void
-go_to_sched()
-{
-  sched();
-  release(&ptable.lock);
-}
-
-void
 block(struct spinlock *lk)
 {
   struct proc *p = myproc();
@@ -629,8 +614,6 @@ unblock(int pid)
     }
   }
   panic("No such process\n");
-  // release(&ptable.lock);
-  // return;
 }
 
 void
