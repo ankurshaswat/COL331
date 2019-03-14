@@ -51,8 +51,8 @@ float max(float a,float b) {
 
 int main(int argc, char *argv[])
 {
-	int i,j;
     int vals_with_me;
+	int i,j;
     int tid=0;
     int pid_below = -1;
     int pid_above = -1;
@@ -88,26 +88,25 @@ int main(int argc, char *argv[])
 	}
 	mean /= (4.0 * N);
 
+	for (i = 1; i <= N-2; i++ )
+		for ( j= 1; j < N-1; j++) u[i][j] = mean;
+
     for(i=1;i<P;i++) {
         tid = i;
         pid = fork();
-
         if(pid == 0) {
             break;
         } else {
+            tid = 0;
             pids[i] = pid;
         }
     }
-
     
+    // printf(1,"pid %d\n",pid);
     if(pid != 0) {
-        tid = 0;
         registerI(increase_pause);
     } else {
         registerI(unblocker);
-    }
-
-    if(tid>0) {
         my_pid = getpid();
         pids[tid] = my_pid;
         pid_above = pids[tid-1];
@@ -129,12 +128,25 @@ int main(int argc, char *argv[])
 
     range_start++;
 
-	for (i = 1; i <= N-2; i++ )
-		for ( j= 1; j < N-1; j++) u[i][j] = mean;
+    if(tid == 0) {
+        while(paused < P-1){
+        }
+        paused = 0;
+        local_diff = diff;
+        send_multi(my_pid,pids,&local_diff,P);
+    } else {
+        local_diff = diff;
+        diff = -1;
+        send_multi(my_pid,pids,&local_diff,1);
+        while(diff<0.0) {
+        }
+    }
+
+    // exit();
 
     for(;;){
         if(tid==0) {
-            printf(1,"%d Loop num %d\n",my_pid,count);
+            printf(1,"%d\n",count);
         }
 
 		diff = 0.0;
@@ -180,7 +192,6 @@ int main(int argc, char *argv[])
                 point_val.value = w[range_start][i];
                 *((struct point_value*)msg_space) = point_val;
                 send(my_pid,pid_above,msg_space);
-
                 index++;
             }
         }
@@ -192,7 +203,6 @@ int main(int argc, char *argv[])
                 point_val.index = index;
                 *((struct point_value*)msg_space) = point_val;
                 send(my_pid,pid_below,msg_space);
-
                 index++;
             }
         }

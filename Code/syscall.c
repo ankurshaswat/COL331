@@ -319,6 +319,10 @@ int sys_send(void) {
     return -1;
   }
 
+  // if(rec_pid > 30) {
+  //   cprintf("gonna fail %d %d\n",rec_pid,myproc()->pid);
+  // }
+
   if(argptr(2,(void*)&msg, sizeof(void*)) <0) {
     return -1;
   }
@@ -339,7 +343,6 @@ int sys_send(void) {
       acquire(&msgQLocks1[rec_pid]);
       insert(&msgQ[rec_pid],new_msg);
       unblock(rec_pid);
-      
       release(&msgQLocks1[rec_pid]);
       return 0;
     }
@@ -356,7 +359,7 @@ int sys_recv(void) {
       initlock(&bufferLock,"bufferLock");
     }
     for(int i=0;i<NPROC;i++) {
-      init(&msgQ[i]);
+      init(&(msgQ[i]));
     }
     initQ=1;
   }
@@ -370,19 +373,22 @@ int sys_recv(void) {
     return -1;
   }
 
-  acquire(&msgQLocks1[myid]);
+  acquire(&(msgQLocks1[myid]));
   struct msg* msg_obj = remov(&msgQ[myid]);
+  
   if(msg_obj == 0) {
-    block(&msgQLocks1[myid]);
-
-    acquire(&msgQLocks1[myid]);    
+    block(&(msgQLocks1[myid]));
     msg_obj = remov(&msgQ[myid]);
-  } 
-  release(&msgQLocks1[myid]);
+  }
+
+  release(&(msgQLocks1[myid]));
 
   memmove(msg,msg_obj->msg,MSGSIZE);
 
-  bufferAllocated[msg_obj->bufferPosition] = 0;
+  if(msg_obj == 0) {
+    panic("Msg Obj 0 from q\n");
+  }
 
+  bufferAllocated[msg_obj->bufferPosition] = 0;
   return 0;
 }

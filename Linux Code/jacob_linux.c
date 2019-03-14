@@ -7,7 +7,7 @@
 #define N 11
 #define E 0.00001
 #define T 100.0
-#define P 6
+#define P 2
 #define L 20000
 
 #define MSGSIZE 8

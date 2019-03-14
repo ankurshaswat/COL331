@@ -22,6 +22,7 @@ struct msg msgBufferI[256];
 int bufferAllocatedI[256] = {0};
 
 struct spinlock msgQLocks[NPROC];
+struct spinlock msgBufferLock;
 struct queue msgQs[NPROC];
 
 static struct proc *initproc;
@@ -53,8 +54,9 @@ pinit(void)
   for(int i=0;i<NPROC;i++) {
     initlock(&(msgQLocks[i]),"msgQLocks");
   }
+  initlock(&msgBufferLock,"bufferLocks");
   for(int i=0;i<NPROC;i++) {
-    init(&msgQs[i]);
+    init(&(msgQs[i]));
   }
 }
 
@@ -372,17 +374,20 @@ scheduler(void)
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
       c->proc = p;
+
       switchuvm(p);
-        
-      acquire(&msgQLocks[p->pid]);
+
       if(sendInterruptSignal[p->pid] == 1)  {
+        acquire(&msgQLocks[p->pid]);
         struct msg* msg_obj = remov(&msgQs[p->pid]);
+        release(&msgQLocks[p->pid]);
+
         if(msg_obj==0) {
           sendInterruptSignal[p->pid]= 0;
         } else {
           sendInterruptSignal[p->pid] = 2;
-          memmove(&(trapframeBackups[p->pid]),p->tf ,sizeof(struct trapframe));
-          p->tf->eip = interruptHandlers[p->pid];
+
+          memmove(&trapframeBackups[p->pid],p->tf ,sizeof(struct trapframe));
           p->tf->esp -= 4;
           p->tf->esp -= MSGSIZE;
           memmove((void*)(p->tf->esp),msg_obj->msg,MSGSIZE);
@@ -390,12 +395,11 @@ scheduler(void)
           p->tf->esp -= 4;
           *((int*)p->tf->esp) = p->tf->esp + 4;
           p->tf->esp -= 4;
+          p->tf->eip = interruptHandlers[p->pid];
         }
       }
-      release(&msgQLocks[p->pid]);
 
       p->state = RUNNING;
-
       swtch(&(c->scheduler), p->context);
       switchkvm();
 
@@ -592,11 +596,21 @@ void
 block(struct spinlock *lk)
 {
   struct proc *p = myproc();
-  acquire(&ptable.lock);
+  
+  if(lk != &ptable.lock) {
+    acquire(&ptable.lock);
+    release(lk);
+  }
+
   p->state = SLEEPING;
-  release(lk);
+  
   sched();
-  release(&ptable.lock);
+  
+  if(lk != &ptable.lock) {
+    release(&ptable.lock);
+    acquire(lk);
+  }
+  
 }
 
 void
@@ -613,7 +627,8 @@ unblock(int pid)
       return;
     }
   }
-  panic("No such process\n");
+  cprintf("No process %d found to unblock\n",pid);
+  panic("");
 }
 
 void
@@ -625,36 +640,46 @@ registerI(int pid,uint func)
 void
 callInterrupt(int pid,void* msg)
 {
-  acquire(&msgQLocks[pid]);
   struct msg* new_msg;
+  
+  acquire(&msgBufferLock);
+  
   for(int i=0;i<NELEM(msgBufferI);i++) {
     if(bufferAllocatedI[i] == 0) {
       bufferAllocatedI[i] = 1;
+      release(&msgBufferLock);
+     
       new_msg = &msgBufferI[i];
       
       new_msg->bufferPosition = i;
       memmove(new_msg->msg,msg,MSGSIZE);
       new_msg->next = 0;
+      
+      acquire(&(msgQLocks[pid]));
       insert(&msgQs[pid],new_msg);
-      break;
+      if(sendInterruptSignal[pid] == 0) {
+        sendInterruptSignal[pid] =1;
+      }
+      release(&(msgQLocks[pid]));
+      
+      return;
     }
   }
-  if(sendInterruptSignal[pid] == 0) {
-    sendInterruptSignal[pid] =1;
-  }
-  release(&msgQLocks[pid]);
+
 }
 
 void
 return_to_kernel(int pid)
 {
+  pushcli();
   struct proc *p = myproc();
-  acquire(&ptable.lock);
-  acquire(&msgQLocks[pid]);
+  // acquire(&ptable.lock);
+  acquire(&(msgQLocks[pid]));
 
   sendInterruptSignal[p->pid] = 1;
   memmove(p->tf,&(trapframeBackups[p->pid]),sizeof(struct trapframe));
   
-  release(&msgQLocks[pid]);  
-  release(&ptable.lock);
+  release(&(msgQLocks[pid]));  
+  // release(&ptable.lock);
+  popcli();
 }
