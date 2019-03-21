@@ -122,7 +122,7 @@ sys_send_multi(void) {
     return -1;
   }
 
-  if(argptr(1,(void*)&rec_pids, length*sizeof(int*)) <0) {
+  if(argptr(1,(void*)&rec_pids, length*sizeof(int)) <0) {
     return -1;
   }
 
@@ -144,5 +144,11 @@ sys_send_multi(void) {
 int
 sys_return_to_kernel(void) {
   return_to_kernel(myproc()->pid);
+  // cprintf("Going home\n");
   return 0;
+}
+
+void
+useless(void) {
+  cprintf("useless\n");
 }

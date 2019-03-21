@@ -377,27 +377,27 @@ scheduler(void)
 
       switchuvm(p);
 
+      acquire(&msgQLocks[p->pid]);
       if(sendInterruptSignal[p->pid] == 1)  {
-        acquire(&msgQLocks[p->pid]);
         struct msg* msg_obj = remov(&msgQs[p->pid]);
-        release(&msgQLocks[p->pid]);
 
         if(msg_obj==0) {
           sendInterruptSignal[p->pid]= 0;
         } else {
+          // cprintf("Messing up %d\n",p->pid);
           sendInterruptSignal[p->pid] = 2;
-
           memmove(&trapframeBackups[p->pid],p->tf ,sizeof(struct trapframe));
-          p->tf->esp -= 4;
+          p->tf->esp -= 8;
           p->tf->esp -= MSGSIZE;
           memmove((void*)(p->tf->esp),msg_obj->msg,MSGSIZE);
           bufferAllocatedI[msg_obj->bufferPosition] = 0;
           p->tf->esp -= 4;
           *((int*)p->tf->esp) = p->tf->esp + 4;
           p->tf->esp -= 4;
-          p->tf->eip = interruptHandlers[p->pid];
+          p->tf->eip = (uint)interruptHandlers[p->pid];
         }
       }
+      release(&msgQLocks[p->pid]);
 
       p->state = RUNNING;
       swtch(&(c->scheduler), p->context);
@@ -617,7 +617,6 @@ void
 unblock(int pid)
 {
   struct proc *p;
-
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->pid == pid){
@@ -655,12 +654,14 @@ callInterrupt(int pid,void* msg)
       memmove(new_msg->msg,msg,MSGSIZE);
       new_msg->next = 0;
       
-      acquire(&(msgQLocks[pid]));
+      acquire(&msgQLocks[pid]);
       insert(&msgQs[pid],new_msg);
+      // cprintf("sendInt %d to %d %d %d\n",myproc()->pid,pid);
+
       if(sendInterruptSignal[pid] == 0) {
         sendInterruptSignal[pid] =1;
       }
-      release(&(msgQLocks[pid]));
+      release(&msgQLocks[pid]);
       
       return;
     }
@@ -673,13 +674,18 @@ return_to_kernel(int pid)
 {
   pushcli();
   struct proc *p = myproc();
-  // acquire(&ptable.lock);
+  acquire(&ptable.lock);
   acquire(&(msgQLocks[pid]));
 
-  sendInterruptSignal[p->pid] = 1;
-  memmove(p->tf,&(trapframeBackups[p->pid]),sizeof(struct trapframe));
-  
-  release(&(msgQLocks[pid]));  
-  // release(&ptable.lock);
+  sendInterruptSignal[pid] = 1;
+  if(p->tf->eip != 0) {
+  memmove(p->tf,&trapframeBackups[pid],sizeof(struct trapframe));
+  }
+
+  release(&msgQLocks[pid]);  
+  release(&ptable.lock);
   popcli();
+  // p->state = RUNNABLE;
+  // sched();
+  // cprintf("ReturnToKernel %d %d %d %d\n",pid,p->pid,p->tf->eip,p->tf->trapno);
 }

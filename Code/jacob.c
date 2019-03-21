@@ -20,13 +20,17 @@ volatile float diff = 0.0;
 volatile int paused = 0;
 
 void unblocker(void *msg) {
+    // printf(1,"Got here\n");
     diff = *((float*)msg);
     return_to_kernel();
+    printf(1,"Shouldn't be here\n");
 }
 
 void increase_pause(void * msg) {
+    // printf(1,"Got here2\n");
     paused++;
     return_to_kernel();
+    printf(1,"Shouldn't be here2\n");
 }
 
 float fabsm(float a){
@@ -51,36 +55,20 @@ float max(float a,float b) {
 
 int main(int argc, char *argv[])
 {
-    int vals_with_me;
-	int i,j;
-    int tid=0;
-    int pid_below = -1;
-    int pid_above = -1;
-    int pid=-1;
-	int count=0;
-    int pids[P];
-    int size = N-2;
-    int num_items_to_process = size/P; 
-    int extra_items = size%P;
-    int range_start = 0;
-    int range_end = 0;
-    int receive_count;
-    int index;
-    int my_pid = getpid();
+    int vals_with_me ,i,j ,pids[P],receive_count,index;
+    int tid=0 ,pid_below = -1 ,pid_above = -1 ,pid=-1 ,count=0 ,size = N-2  ,range_start = 0 ,range_end = 0 ,my_pid ;
+    int num_items_to_process = size/P, extra_items = size%P;
 
-	float mean;
-	float u[N][N];
-	float w[N][N];
-    float local_diff;
-    float value;
+	float mean ,u[N][N] ,w[N][N] ,local_diff ,value;
 
 	void *msg_space = malloc(MSGSIZE);
 
     struct point_value point_val;
 
-    pids[0] = my_pid;
 
 	mean = 0.0;
+    my_pid = getpid();
+    pids[0] = my_pid;
 	for (i = 0; i < N; i++){
 		u[i][0] = u[i][N-1] = u[0][i] = T;
 		u[N-1][i] = 0.0;
@@ -90,30 +78,60 @@ int main(int argc, char *argv[])
 
 	for (i = 1; i <= N-2; i++ )
 		for ( j= 1; j < N-1; j++) u[i][j] = mean;
+    
+    registerI(increase_pause);
 
     for(i=1;i<P;i++) {
         tid = i;
         pid = fork();
         if(pid == 0) {
+            /* Children */
+            registerI(unblocker);
             break;
-        } else {
-            tid = 0;
-            pids[i] = pid;
+        }
+        // if(getpid() == 3) {
+        //     printf(1,"inside\n");
+        // }
+        /* Master Thread */
+        pids[i] = pid;
+        tid = 0;
+    }
+    sleep(10);
+    if(tid == 0) {
+        /* Master Thread */
+        while(paused < P-1){
+        }
+        paused = 0;
+        local_diff = diff;
+        send_multi(my_pid,pids,&local_diff,P);
+    } else {
+        /* Children */
+        local_diff = diff;
+        diff = -1;
+        send_multi(my_pid,pids,&local_diff,1);
+        while(diff<0.0) {
         }
     }
-    
+
     // printf(1,"pid %d\n",pid);
-    if(pid != 0) {
-        registerI(increase_pause);
-    } else {
-        registerI(unblocker);
+    
+    if(pid != 0) { 
+        /* Master thread */
+        tid = 0;
+        if(P>1) {
+            pid_below = pids[1];
+        }
+    } else { 
+        /* Children */
         my_pid = getpid();
         pids[tid] = my_pid;
         pid_above = pids[tid-1];
-        send(my_pid,pids[tid-1],&my_pid);
+        if(tid-1 != 0) {
+            send(my_pid,pids[tid-1],&my_pid);
+        }
     }
 
-    if(tid < P - 1) {
+    if(tid < P - 1 && tid != 0) {
         recv(msg_space);
         pid_below = *((int*)msg_space);
     }
@@ -128,19 +146,24 @@ int main(int argc, char *argv[])
 
     range_start++;
 
+    // printf(1,"Here\n");
+
     if(tid == 0) {
+        /* Master Thread */
         while(paused < P-1){
         }
         paused = 0;
         local_diff = diff;
         send_multi(my_pid,pids,&local_diff,P);
     } else {
+        /* Children */
         local_diff = diff;
         diff = -1;
         send_multi(my_pid,pids,&local_diff,1);
         while(diff<0.0) {
         }
     }
+    // printf(1,"Her1e\n");
 
     // exit();
 

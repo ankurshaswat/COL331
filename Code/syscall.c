@@ -340,6 +340,8 @@ int sys_send(void) {
       memmove(new_msg->msg,msg,MSGSIZE);
       new_msg->next = 0;
 
+      // cprintf("rec_pid %d\n",rec_pid);
+
       acquire(&msgQLocks1[rec_pid]);
       insert(&msgQ[rec_pid],new_msg);
       unblock(rec_pid);
