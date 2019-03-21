@@ -4,14 +4,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define N 11
-#define E 0.00001
-#define T 100.0
-#define P 2
-#define L 20000
-
-#define MSGSIZE 8
-
 struct point_value {
   float value;
   int index;
@@ -39,6 +31,23 @@ float max(float a, float b) {
 
 int main(int argc, char *argv[]) {
 
+  char filename[] = "assig2a.inp", *line = NULL;
+  FILE *fptr = fopen(filename, "r");
+  size_t len = 0;
+  int N, P, L;
+  float E, T;
+
+  getline(&line, &len, fptr);
+  N = atoi(line);
+  getline(&line, &len, fptr);
+  E = atof(line);
+  getline(&line, &len, fptr);
+  T = atof(line);
+  getline(&line, &len, fptr);
+  P = atoi(line);
+  getline(&line, &len, fptr);
+  L = atoi(line);
+
   int i, j, vals_with_me, pids[P], index, receive_count,
       my_pid = getpid(), pipes[P][2], interrupt_pipes[P][2];
   int count = 0, tid = 0, size = N - 2, pid = -1, range_start = 0,
@@ -48,7 +57,7 @@ int main(int argc, char *argv[]) {
   float mean = 0.0;
   float u[N][N], w[N][N], value, diff;
 
-  void *msg_space = malloc(MSGSIZE);
+  void *msg_space = malloc(sizeof(struct point_value));
 
   struct point_value point_val;
 
@@ -89,11 +98,11 @@ int main(int argc, char *argv[]) {
     my_pid = getpid();
     pids[tid] = my_pid;
     pid_above = pids[tid - 1];
-    write(pipes[tid - 1][1], &my_pid, MSGSIZE);
+    write(pipes[tid - 1][1], &my_pid, sizeof(struct point_value));
   }
 
   if (tid < P - 1) {
-    read(pipes[tid][0], msg_space, MSGSIZE);
+    read(pipes[tid][0], msg_space, sizeof(struct point_value));
     pid_below = *((int *)msg_space);
   }
 
@@ -125,20 +134,20 @@ int main(int argc, char *argv[]) {
 
     // Send diff to master thread
     if (pid == 0) {
-      write(pipes[0][1], &diff, MSGSIZE);
+      write(pipes[0][1], &diff, sizeof(struct point_value));
       if (P > 1) {
-        read(interrupt_pipes[tid][0], msg_space, MSGSIZE);
+        read(interrupt_pipes[tid][0], msg_space, sizeof(struct point_value));
       }
       diff = *((float *)msg_space);
     } else {
       receive_count = 1;
       while (receive_count < P) {
-        read(pipes[tid][0], msg_space, MSGSIZE);
+        read(pipes[tid][0], msg_space, sizeof(struct point_value));
         diff = max(*((float *)msg_space), diff);
         receive_count++;
       }
       for (i = 1; i < P; i++) {
-        write(interrupt_pipes[i][1], &diff, MSGSIZE);
+        write(interrupt_pipes[i][1], &diff, sizeof(struct point_value));
       }
     }
 
@@ -159,7 +168,7 @@ int main(int argc, char *argv[]) {
         point_val.index = index;
         point_val.value = w[range_start][i];
         *((struct point_value *)msg_space) = point_val;
-        write(pipes[tid - 1][1], msg_space, MSGSIZE);
+        write(pipes[tid - 1][1], msg_space, sizeof(struct point_value));
         index++;
       }
     }
@@ -171,7 +180,7 @@ int main(int argc, char *argv[]) {
         point_val.index = index;
 
         *((struct point_value *)msg_space) = point_val;
-        write(pipes[tid + 1][1], msg_space, MSGSIZE);
+        write(pipes[tid + 1][1], msg_space, sizeof(struct point_value));
         index++;
       }
     }
@@ -179,7 +188,7 @@ int main(int argc, char *argv[]) {
     // Wait Here For Required Updates if not terminated
 
     while (receive_count > 0) {
-      read(pipes[tid][0], msg_space, MSGSIZE);
+      read(pipes[tid][0], msg_space, sizeof(struct point_value));
       point_val = *((struct point_value *)msg_space);
       index = point_val.index;
       value = point_val.value;
@@ -190,15 +199,15 @@ int main(int argc, char *argv[]) {
     // Synchronize Here
 
     if (tid == 0) {
-      if (P > 1) {
-        read(interrupt_pipes[tid][0], msg_space, MSGSIZE);
+      for (i = 1; i < P; i++) {
+        read(interrupt_pipes[tid][0], msg_space, sizeof(struct point_value));
       }
       for (i = 1; i < P; i++) {
-        write(interrupt_pipes[i][1], msg_space, MSGSIZE);
+        write(interrupt_pipes[i][1], msg_space, sizeof(struct point_value));
       }
     } else {
-      write(interrupt_pipes[0][1], msg_space, MSGSIZE);
-      read(interrupt_pipes[tid][0], msg_space, MSGSIZE);
+      write(interrupt_pipes[0][1], msg_space, sizeof(struct point_value));
+      read(interrupt_pipes[tid][0], msg_space, sizeof(struct point_value));
     }
 
     for (i = range_start; i <= range_end; i++)
@@ -215,7 +224,7 @@ int main(int argc, char *argv[]) {
         point_val.value = u[i][j];
         point_val.index = i * N + j;
         *((struct point_value *)msg_space) = point_val;
-        write(pipes[0][1], msg_space, MSGSIZE);
+        write(pipes[0][1], msg_space, sizeof(struct point_value));
       }
     }
 
@@ -232,7 +241,7 @@ int main(int argc, char *argv[]) {
   receive_count = (N - 2) * (N - 2) - vals_with_me;
 
   while (receive_count > 0) {
-    read(pipes[tid][0], msg_space, MSGSIZE);
+    read(pipes[tid][0], msg_space, sizeof(struct point_value));
     point_val = *((struct point_value *)msg_space);
     index = point_val.index;
     value = point_val.value;
@@ -242,8 +251,15 @@ int main(int argc, char *argv[]) {
 
   for (i = 0; i < N; i++) {
     for (j = 0; j < N; j++)
-      printf("%d ", ((int)u[i][j]));
+      printf("%f ", u[i][j]);
     printf("\n");
+  }
+
+  for (i = 0; i < P; i++) {
+    close(pipes[i][0]);
+    close(pipes[i][1]);
+    close(interrupt_pipes[i][0]);
+    close(interrupt_pipes[i][1]);
   }
 
   exit(1);
