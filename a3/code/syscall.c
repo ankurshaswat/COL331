@@ -103,6 +103,11 @@ extern int sys_unlink(void);
 extern int sys_wait(void);
 extern int sys_write(void);
 extern int sys_uptime(void);
+extern int sys_create_container(void);
+extern int sys_ps(void);
+extern int sys_leave_container(void);
+extern int sys_join_container(void);
+extern int sys_destroy_container(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -126,6 +131,11 @@ static int (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_create_container] sys_create_container,
+[SYS_ps] sys_ps,
+[SYS_leave_container] sys_leave_container,
+[SYS_join_container] sys_join_container,
+[SYS_destroy_container] sys_destroy_container
 };
 
 void
@@ -142,4 +152,67 @@ syscall(void)
             curproc->pid, curproc->name, num);
     curproc->tf->eax = -1;
   }
+}
+
+// lock this afterward
+int containers[10] = {0};
+
+int
+create_container(void)
+{
+  int selected_container = -1;
+
+  for(int i=0;i<NELEM(containers);i++) {
+    if(containers[i] == 0) {
+      containers[i] = 1;
+      selected_container = i;
+      break;
+    }
+  }
+
+  if(selected_container<0) {
+    return -1;
+  }
+
+  if(fork()<0) {
+    return -1;
+  }
+
+  // free container available marker if failed
+
+  // char x = '0' +selected_container;
+
+  char *argv[] = { "container_manager", (char*)selected_container , 0 };
+  exec("container_manager",argv);
+  return 0;
+}
+
+int 
+sys_create_container(void)
+{
+  return create_container();
+}
+
+int
+sys_ps(void)
+{
+  return -1;
+}
+
+int 
+sys_leave_container(void)
+{
+  return -1;
+}
+
+int
+sys_join_container(void)
+{
+  return -1;
+}
+
+int
+sys_destroy_container(void)
+{
+  return -1;
 }
