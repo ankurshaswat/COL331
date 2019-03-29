@@ -5,8 +5,8 @@
 #include <unistd.h>
 
 struct point_value {
-  float value;
-  int index;
+  int row_id;
+  float values[];
 };
 
 float fabsm(float a) {
@@ -48,18 +48,32 @@ int main(int argc, char *argv[]) {
   getline(&line, &len, fptr);
   L = atoi(line);
 
-  int i, j, vals_with_me, pids[P], index, receive_count,
-      my_pid = getpid(), pipes[P][2], interrupt_pipes[P][2];
-  int count = 0, tid = 0, size = N - 2, pid = -1, range_start = 0,
-      range_end = 0, pid_above = -1, pid_below = -1;
+  fclose(fptr);
+
+  if (N == 1) {
+    printf("%f\n", T);
+    exit(1);
+  } else if (N == 2) {
+    printf("%f %f \n", T, T);
+    printf("%f %f \n", T, 0.0);
+    exit(1);
+  }
+
+  if (N - 2 < P) {
+    P = N - 2;
+  }
+
+  int i, j, pids[P], receive_count, row_id,
+      my_pid = getpid(), pipes[P][2], interrupt_pipes[P][2], count = 0, tid = 0,
+      size = N - 2, pid = -1, range_start = 0, range_end = 0, pid_above = -1,
+      pid_below = -1;
   int extra_items = size % P, num_items_to_process = size / P;
 
   float mean = 0.0;
-  float u[N][N], w[N][N], value, diff;
+  float u[N][N], w[N][N], diff;
 
-  void *msg_space = malloc(sizeof(struct point_value));
-
-  struct point_value point_val;
+  int MSGSIZE = sizeof(struct point_value *) + sizeof(float) * (N - 2);
+  struct point_value *point_val = (struct point_value *)malloc(MSGSIZE);
 
   pids[0] = my_pid;
 
@@ -98,12 +112,12 @@ int main(int argc, char *argv[]) {
     my_pid = getpid();
     pids[tid] = my_pid;
     pid_above = pids[tid - 1];
-    write(pipes[tid - 1][1], &my_pid, sizeof(struct point_value));
+    write(pipes[tid - 1][1], &my_pid, sizeof(int));
   }
 
   if (tid < P - 1) {
-    read(pipes[tid][0], msg_space, sizeof(struct point_value));
-    pid_below = *((int *)msg_space);
+    read(pipes[tid][0], point_val, sizeof(int));
+    pid_below = *((int *)point_val);
   }
 
   if (tid + 1 <= extra_items) {
@@ -123,6 +137,10 @@ int main(int argc, char *argv[]) {
 
   for (;;) {
 
+    // if (tid == 0) {
+    //   printf("%d\n", count);
+    // }
+
     diff = 0.0;
     for (i = range_start; i <= range_end; i++) {
       for (j = 1; j < N - 1; j++) {
@@ -134,20 +152,20 @@ int main(int argc, char *argv[]) {
 
     // Send diff to master thread
     if (pid == 0) {
-      write(pipes[0][1], &diff, sizeof(struct point_value));
+      write(pipes[0][1], &diff, sizeof(float));
       if (P > 1) {
-        read(interrupt_pipes[tid][0], msg_space, sizeof(struct point_value));
+        read(interrupt_pipes[tid][0], point_val, sizeof(float));
       }
-      diff = *((float *)msg_space);
+      diff = *((float *)point_val);
     } else {
       receive_count = 1;
       while (receive_count < P) {
-        read(pipes[tid][0], msg_space, sizeof(struct point_value));
-        diff = max(*((float *)msg_space), diff);
+        read(pipes[tid][0], point_val, sizeof(float));
+        diff = max(*((float *)point_val), diff);
         receive_count++;
       }
       for (i = 1; i < P; i++) {
-        write(interrupt_pipes[i][1], &diff, sizeof(struct point_value));
+        write(interrupt_pipes[i][1], &diff, sizeof(float));
       }
     }
 
@@ -162,52 +180,44 @@ int main(int argc, char *argv[]) {
     // Send values to above and below
 
     if (pid_above != -1) {
-      receive_count += N - 2;
-      index = range_start * N + 1;
+      receive_count++;
+      point_val->row_id = range_start;
       for (i = 1; i < N - 1; i++) {
-        point_val.index = index;
-        point_val.value = w[range_start][i];
-        *((struct point_value *)msg_space) = point_val;
-        write(pipes[tid - 1][1], msg_space, sizeof(struct point_value));
-        index++;
+        point_val->values[i - 1] = w[range_start][i];
       }
+      write(pipes[tid - 1][1], point_val, MSGSIZE);
     }
     if (pid_below != -1) {
-      receive_count += N - 2;
-      index = range_end * N + 1;
+      receive_count++;
+      point_val->row_id = range_end;
       for (i = 1; i < N - 1; i++) {
-        point_val.value = w[range_end][i];
-        point_val.index = index;
-
-        *((struct point_value *)msg_space) = point_val;
-        write(pipes[tid + 1][1], msg_space, sizeof(struct point_value));
-        index++;
+        point_val->values[i - 1] = w[range_end][i];
       }
+      write(pipes[tid + 1][1], point_val, MSGSIZE);
     }
 
     // Wait Here For Required Updates if not terminated
 
     while (receive_count > 0) {
-      read(pipes[tid][0], msg_space, sizeof(struct point_value));
-      point_val = *((struct point_value *)msg_space);
-      index = point_val.index;
-      value = point_val.value;
-      u[index / N][index % N] = value;
+      read(pipes[tid][0], point_val, MSGSIZE);
+      row_id = point_val->row_id;
+      for (int i = 1; i < N - 1; i++) {
+        u[row_id][i] = point_val->values[i - 1];
+      }
       receive_count--;
     }
 
     // Synchronize Here
-
     if (tid == 0) {
       for (i = 1; i < P; i++) {
-        read(interrupt_pipes[tid][0], msg_space, sizeof(struct point_value));
+        read(interrupt_pipes[tid][0], point_val, 1);
       }
       for (i = 1; i < P; i++) {
-        write(interrupt_pipes[i][1], msg_space, sizeof(struct point_value));
+        write(interrupt_pipes[i][1], point_val, 1);
       }
     } else {
-      write(interrupt_pipes[0][1], msg_space, sizeof(struct point_value));
-      read(interrupt_pipes[tid][0], msg_space, sizeof(struct point_value));
+      write(interrupt_pipes[0][1], point_val, 1);
+      read(interrupt_pipes[tid][0], point_val, 1);
     }
 
     for (i = range_start; i <= range_end; i++)
@@ -218,34 +228,25 @@ int main(int argc, char *argv[]) {
   if (pid == 0) {
 
     // Send back all new values to master thread
-
     for (i = range_start; i <= range_end; i++) {
+      point_val->row_id = i;
       for (j = 1; j < N - 1; j++) {
-        point_val.value = u[i][j];
-        point_val.index = i * N + j;
-        *((struct point_value *)msg_space) = point_val;
-        write(pipes[0][1], msg_space, sizeof(struct point_value));
+        point_val->values[j - 1] = u[i][j];
       }
+      write(pipes[0][1], point_val, MSGSIZE);
     }
 
     exit(1);
   }
 
-  receive_count = 1;
-  while (receive_count < P) {
-    wait(NULL);
-    receive_count++;
-  }
-
-  vals_with_me = (range_end - range_start + 1) * (N - 2);
-  receive_count = (N - 2) * (N - 2) - vals_with_me;
+  receive_count = N - 2 - (range_end - range_start + 1);
 
   while (receive_count > 0) {
-    read(pipes[tid][0], msg_space, sizeof(struct point_value));
-    point_val = *((struct point_value *)msg_space);
-    index = point_val.index;
-    value = point_val.value;
-    u[index / N][index % N] = value;
+    read(pipes[tid][0], point_val, MSGSIZE);
+    row_id = point_val->row_id;
+    for (int i = 1; i < N - 1; i++) {
+      u[row_id][i] = point_val->values[i - 1];
+    }
     receive_count--;
   }
 

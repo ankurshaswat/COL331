@@ -8,7 +8,7 @@
 #include "sleeplock.h"
 #include "file.h"
 
-#define PIPESIZE 2048
+#define PIPESIZE 512
 
 struct pipe {
   struct spinlock lock;
@@ -43,7 +43,6 @@ pipealloc(struct file **f0, struct file **f1)
   (*f1)->readable = 0;
   (*f1)->writable = 1;
   (*f1)->pipe = p;
-
   return 0;
 
 //PAGEBREAK: 20

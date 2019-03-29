@@ -1,18 +1,20 @@
-#include "types.h"
-#include "stat.h"
-#include "user.h"
-
-#define NULL (void *)0
+#include <malloc.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
 
 struct msg {
   char req_type;
-  int time_stamp;
+  long time_stamp;
   int index;
 };
 
 struct requestQnode {
   int index;
-  int time_stamp;
+  long time_stamp;
   struct requestQnode *next;
 };
 
@@ -20,7 +22,7 @@ struct q {
   struct requestQnode *head, *tail;
 };
 
-struct requestQnode *createNode(int index, int time_stamp) {
+struct requestQnode *createNode(int index, long time_stamp) {
   struct requestQnode *node =
       (struct requestQnode *)malloc(sizeof(struct requestQnode));
   node->index = index;
@@ -35,17 +37,7 @@ struct q *createQ() {
   return qu;
 }
 
-void insert(struct q *qu, int index, int time_stamp) {
-  struct requestQnode *node = createNode(index, time_stamp);
-  if (qu->tail == NULL) {
-    qu->head = qu->tail = node;
-    return;
-  }
-  qu->tail->next = node;
-  qu->tail = node;
-}
-
-void insert_in_priority(struct q *qu, int index, int time_stamp) {
+void insert_in_priority(struct q *qu, int index, long time_stamp) {
   struct requestQnode *node = createNode(index, time_stamp),
                       *prev_node = qu->head, *temp_node = qu->head;
   if (qu->tail == NULL) {
@@ -79,6 +71,16 @@ void insert_in_priority(struct q *qu, int index, int time_stamp) {
   }
 }
 
+void insert(struct q *qu, int index, long time_stamp) {
+  struct requestQnode *node = createNode(index, time_stamp);
+  if (qu->tail == NULL) {
+    qu->head = qu->tail = node;
+    return;
+  }
+  qu->tail->next = node;
+  qu->tail = node;
+}
+
 struct requestQnode *remove_item(struct q *qu) {
   if (qu->head == NULL) {
     return NULL;
@@ -91,7 +93,7 @@ struct requestQnode *remove_item(struct q *qu) {
   return top;
 }
 
-int higherPriorityExists(struct q *qu, int time_stamp, int index) {
+int higherPriorityExists(struct q *qu, long time_stamp, int index) {
   struct requestQnode *top = qu->head;
   if (top == NULL) {
     return 0;
@@ -113,25 +115,22 @@ int empty(struct q *qu) {
 
 int main(int argc, char *argv[]) {
 
-  char *filename = "assig2b.inp", line;
-  int fptr = open(filename, 0), P = 0, P1 = 0, P2 = 0;
+  char filename[] = "assig2b.inp", *line = NULL;
 
-  read(fptr, &line, 1);
-  while (line != '\n') {
-    P = P * 10 + atoi(&line);
-    read(fptr, &line, 1);
-  }
-  read(fptr, &line, 1);
-  while (line != '\n') {
-    P1 = P1 * 10 + atoi(&line);
-    read(fptr, &line, 1);
-  }
-  read(fptr, &line, 1);
-  while (line != '\n') {
-    P2 = P2 * 10 + atoi(&line);
-    read(fptr, &line, 1);
-  }
-  close(fptr);
+  size_t len = 0;
+
+  int P, P1, P2;
+
+  FILE *fptr = fopen(filename, "r");
+
+  getline(&line, &len, fptr);
+  P = atoi(line);
+  getline(&line, &len, fptr);
+  P1 = atoi(line);
+  getline(&line, &len, fptr);
+  P2 = atoi(line);
+
+  fclose(fptr);
 
   int type, i, j, my_index, tid, pid, receiver_addr, row_num, col_num,
       locked_by, locked = 0, num_rows = 1, locks_achieved = 0, failed = 0,
@@ -159,13 +158,13 @@ int main(int argc, char *argv[]) {
     for (j = 0; j < num_rows; j++) {
       locks_achieved_pos[i][j] = 0;
       if (pipe(pipes[i][j]) < 0) {
-        exit();
+        exit(1);
       }
     }
   }
 
   if (pipe(count_pipe) < 0) {
-    exit();
+    exit(1);
   }
 
   /* Generate processes with types */
@@ -205,12 +204,12 @@ int main(int argc, char *argv[]) {
 
     for (int i = 0; i < num_rows; i++) {
       for (int j = 0; j < num_rows; j++) {
-        kill(pids[i][j]);
+        kill(pids[i][j], SIGKILL);
         close(pipes[i][j][0]);
         close(pipes[i][j][1]);
       }
     }
-    exit();
+    exit(1);
   }
 
   my_index = row_num * num_rows + col_num;
@@ -229,7 +228,7 @@ int main(int argc, char *argv[]) {
     /* Send Requests */
     msg_space.req_type = 'R';
     msg_space.index = my_index;
-    msg_space.time_stamp = uptime();
+    msg_space.time_stamp = time(0);
     for (i = 0; i < num_rows; i++) {
       if (i != col_num) {
         write(pipes[row_num][i][1], &msg_space, sizeof(struct msg));
@@ -238,8 +237,17 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  // char str[10];
+  // sprintf(str, "count.txt");
+  // sprintf(str, "%d_%d.txt", row_num, col_num);
+
+  // FILE *fp = fopen(str, "a");
+
   while (1) {
     read(pipes[row_num][col_num][0], &msg_space, sizeof(struct msg));
+    // fprintf(fp, "%d %d received %c from %d %d\n", row_num, col_num,
+    //         msg_space.req_type, msg_space.index / num_rows,
+    //         msg_space.index % num_rows);
 
     switch (msg_space.req_type) {
     case 'R': /* Request */
@@ -254,6 +262,8 @@ int main(int argc, char *argv[]) {
         write(pipes[locked_by / num_rows][locked_by % num_rows][1], &msg_space,
               sizeof(struct msg));
 
+        // fprintf(fp, "%d %d sent %c to %d %d\n", row_num, col_num,
+        //         msg_space.req_type, locked_by / num_rows, locked_by % num_rows);
       } else {
         /* Add request to request queue */
         insert_in_priority(requestQ, msg_space.index, msg_space.time_stamp);
@@ -269,6 +279,9 @@ int main(int argc, char *argv[]) {
 
           write(pipes[locked_by / num_rows][locked_by % num_rows][1],
                 &msg_space, sizeof(struct msg));
+          // fprintf(fp, "%d %d sent %c to %d %d\n", row_num, col_num,
+          //         msg_space.req_type, locked_by / num_rows,
+          //         locked_by % num_rows);
         } else {
 
           receiver_addr = msg_space.index;
@@ -278,6 +291,9 @@ int main(int argc, char *argv[]) {
 
           write(pipes[receiver_addr / num_rows][receiver_addr % num_rows][1],
                 &msg_space, sizeof(struct msg));
+          // fprintf(fp, "%d %d sent %c to %d %d\n", row_num, col_num,
+          //         msg_space.req_type, receiver_addr / num_rows,
+          //         receiver_addr % num_rows);
         }
       }
       break;
@@ -303,6 +319,8 @@ int main(int argc, char *argv[]) {
           locks_achieved_pos[tempNode->index / num_rows]
                             [tempNode->index % num_rows] = 0;
           locks_achieved--;
+        } else {
+          continue;
         }
 
         /* Send relinquish to temp */
@@ -337,6 +355,9 @@ int main(int argc, char *argv[]) {
 
         write(pipes[receiver_addr / num_rows][receiver_addr % num_rows][1],
               &msg_space, sizeof(struct msg));
+        // fprintf(fp, "%d %d sent %c to %d %d\n", row_num, col_num,
+        //         msg_space.req_type, receiver_addr / num_rows,
+        //         receiver_addr % num_rows);
       } else {
         /* Else store relinquish in q to defer msg */
         insert(relinquishQ, msg_space.index, msg_space.time_stamp);
@@ -359,6 +380,8 @@ int main(int argc, char *argv[]) {
 
       write(pipes[locked_by / num_rows][locked_by % num_rows][1], &msg_space,
             sizeof(struct msg));
+      // fprintf(fp, "%d %d sent %c to %d %d\n", row_num, col_num,
+      //         msg_space.req_type, locked_by / num_rows, locked_by % num_rows);
       /* Add requester to wait q */
       insert_in_priority(requestQ, receiver_addr, relinquisher_time_stamp);
       break;
@@ -379,20 +402,26 @@ int main(int argc, char *argv[]) {
 
         write(pipes[locked_by / num_rows][locked_by % num_rows][1], &msg_space,
               sizeof(struct msg));
+        // fprintf(fp, "%d %d sent %c to %d %d\n", row_num, col_num,
+        //         msg_space.req_type, locked_by / num_rows, locked_by % num_rows);
       }
       break;
 
     default:
-      printf(1, "Check types %c", msg_space.req_type);
+      printf("Check types %c", msg_space.req_type);
       break;
     }
 
     if (locks_achieved == 2 * num_rows - 1) {
-      printf(1, "%d acquired the lock at time %d\n", getpid(), uptime());
+      printf("%d acquired the lock at time %li\n", getpid(), time(0));
+      // fprintf(fp, "%d acquired the lock at time %li\n", getpid(), time(0));
       if (type == 2) {
         sleep(2);
       }
-      printf(1, "%d released the lock at time %d\n", getpid(), uptime());
+      printf("%d released the lock at time %li\n", getpid(), time(0));
+      // fprintf(fp, "%d released the lock at time %li\n", getpid(), time(0));
+
+      fflush(stdout);
 
       write(count_pipe[1], &msg_space, sizeof(struct msg));
 
@@ -402,10 +431,15 @@ int main(int argc, char *argv[]) {
       for (i = 0; i < num_rows; i++) {
         if (i != col_num) {
           write(pipes[row_num][i][1], &msg_space, sizeof(struct msg));
+          // fprintf(fp, "%d %d sent %c to %d %d\n", row_num, col_num,
+          //         msg_space.req_type, row_num, i);
         }
         write(pipes[i][col_num][1], &msg_space, sizeof(struct msg));
+        // fprintf(fp, "%d %d sent %c to %d %d\n", row_num, col_num,
+        //         msg_space.req_type, i, col_num);
       }
       locks_achieved++;
     }
+    // fflush(fp);
   }
 }
