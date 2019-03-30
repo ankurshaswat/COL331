@@ -153,6 +153,41 @@ userinit(void)
   release(&ptable.lock);
 }
 
+// void
+// containerinit(void) {
+//     struct proc *p;
+//   extern char _binary_containercode_start[], _binary_containercode_size[];
+
+//   p = allocproc();
+  
+//   // initproc = p;
+//   if((p->pgdir = setupkvm()) == 0)
+//     panic("userinit: out of memory?");
+//   inituvm(p->pgdir, _binary_containercode_start, (int)_binary_containercode_size);
+//   p->sz = PGSIZE;
+//   memset(p->tf, 0, sizeof(*p->tf));
+//   p->tf->cs = (SEG_UCODE << 3) | DPL_USER;
+//   p->tf->ds = (SEG_UDATA << 3) | DPL_USER;
+//   p->tf->es = p->tf->ds;
+//   p->tf->ss = p->tf->ds;
+//   p->tf->eflags = FL_IF;
+//   p->tf->esp = PGSIZE;
+//   p->tf->eip = 0;  // beginning of initcode.S
+
+//   safestrcpy(p->name, "initcode", sizeof(p->name));
+//   p->cwd = namei("/");
+
+//   // this assignment to p->state lets other cores
+//   // run this process. the acquire forces the above
+//   // writes to be visible, and the lock is also needed
+//   // because the assignment might not be atomic.
+//   acquire(&ptable.lock);
+
+//   p->state = RUNNABLE;
+
+//   release(&ptable.lock);
+// }
+
 // Grow current process's memory by n bytes.
 // Return 0 on success, -1 on failure.
 int
@@ -221,6 +256,106 @@ fork(void)
   return pid;
 }
 
+int
+fork_modified(int container_value)
+{
+  int i, pid;
+  struct proc *np;
+  struct proc *curproc = myproc();
+
+  // Allocate process.
+  if((np = allocproc()) == 0){
+    return -1;
+  }
+
+  // Copy process state from proc.
+  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
+    kfree(np->kstack);
+    np->kstack = 0;
+    np->state = UNUSED;
+    return -1;
+  }
+  np->sz = curproc->sz;
+  np->parent = curproc;
+  *np->tf = *curproc->tf;
+
+  // Clear %eax so that fork returns 0 in the child.
+  np->tf->eax = container_value;
+
+  for(i = 0; i < NOFILE; i++)
+    if(curproc->ofile[i])
+      np->ofile[i] = filedup(curproc->ofile[i]);
+  np->cwd = idup(curproc->cwd);
+
+  safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+
+  pid = np->pid;
+
+  // int exec_result = exec_modified(path, argv,np);
+
+  // cprintf("Exec returned %d\n",exec_result);
+
+  acquire(&ptable.lock);
+
+  np->state = RUNNABLE;
+
+  release(&ptable.lock);
+
+  return pid;
+
+}
+int
+fork_modified2(char *path,char **argv)
+{
+  int i, pid;
+  struct proc *np;
+  struct proc *curproc = myproc();
+
+  // Allocate process.
+  if((np = allocproc()) == 0){
+    return -1;
+  }
+
+  // Copy process state from proc.
+  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
+    kfree(np->kstack);
+    np->kstack = 0;
+    np->state = UNUSED;
+    return -1;
+  }
+  np->sz = curproc->sz;
+  np->parent = curproc;
+  *np->tf = *curproc->tf;
+
+  // Clear %eax so that fork returns 0 in the child.
+  np->tf->eax = 0;
+
+  for(i = 0; i < NOFILE; i++)
+    if(curproc->ofile[i])
+      np->ofile[i] = filedup(curproc->ofile[i]);
+  np->cwd = idup(curproc->cwd);
+
+  safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+
+  pid = np->pid;
+
+  if(exec_modified(path, argv,np)<0)
+  {
+    kill(pid);
+    return -1;
+  }
+
+  // cprintf("Exec returned %d\n",exec_result);
+
+  acquire(&ptable.lock);
+
+  np->state = RUNNABLE;
+
+  release(&ptable.lock);
+
+  return pid;
+
+}
 // Exit the current process.  Does not return.
 // An exited process remains in the zombie state
 // until its parent calls wait() to find out it exited.

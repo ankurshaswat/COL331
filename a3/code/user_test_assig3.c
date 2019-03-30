@@ -4,8 +4,10 @@
 
 int main(int argc, char *argv[]) {
 
-  create_container();
-  printf(1,"I am back %d\n",getpid());
+  int container_num = create_container();
+  printf(1,"%d started container %d\n",getpid(),container_num);
+  container_num = create_container();
+  printf(1,"%d started container %d\n",getpid(),container_num);
   while(1) {}
   exit();
   //   /* Creating the containers . */

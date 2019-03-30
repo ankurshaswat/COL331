@@ -24,6 +24,7 @@ void            panic(char*) __attribute__((noreturn));
 
 // exec.c
 int             exec(char*, char**);
+int             exec_modified(char*, char**,struct proc*);
 
 // file.c
 struct file*    filealloc(void);
@@ -106,6 +107,8 @@ int             pipewrite(struct pipe*, char*, int);
 int             cpuid(void);
 void            exit(void);
 int             fork(void);
+int             fork_modified(int);
+int             fork_modified2(char *,char**);
 int             growproc(int);
 int             kill(int);
 struct cpu*     mycpu(void);

@@ -174,17 +174,24 @@ create_container(void)
     return -1;
   }
 
-  if(fork()<0) {
-    return -1;
-  }
+  // char c = '0' + selected_container;
 
+  char *argv[] = { "container_manager", (char*)&selected_container ,0 };
+  fork_modified2("container_manager",argv);
+
+  // cprintf("Fork started by %d\n",myproc()->pid);
+  
   // free container available marker if failed
 
-  // char x = '0' +selected_container;
-
-  char *argv[] = { "container_manager", (char*)selected_container , 0 };
-  exec("container_manager",argv);
-  return 0;
+  return selected_container;
+  
+  // if(fork_modified(selected_container)<0) {
+  //   return -1;
+  // }
+  // // char x = '0' +selected_container;
+  // char *argv[] = { "container_manager", (char*)selected_container , 0 };
+  // exec("container_manager",argv);
+  // return 0;
 }
 
 int 
