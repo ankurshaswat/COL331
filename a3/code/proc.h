@@ -54,6 +54,30 @@ struct proc {
   // -1 for none
 };
 
+enum container_states
+{
+    UNUSED_CONTAINER,
+    IN_USE
+};
+
+#define NUM_STORE_MAPS 20
+
+struct process_table
+{
+    int local_id[NUM_STORE_MAPS];
+    int global_id[NUM_STORE_MAPS];
+    char names[NUM_STORE_MAPS][16];
+};
+
+// Per-container state
+struct container
+{
+    // Using for assignment 3
+    int container_id;
+    enum container_states state; // Process state
+    struct process_table pmap;
+    int process_id;
+};
 // Process memory is laid out contiguously, low addresses first:
 //   text
 //   original data and bss

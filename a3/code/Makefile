@@ -1,7 +1,6 @@
 OBJS = \
 	bio.o\
 	console.o\
-	container.o\
 	exec.o\
 	file.o\
 	fs.o\

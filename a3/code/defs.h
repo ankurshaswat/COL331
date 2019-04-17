@@ -10,13 +10,6 @@ struct sleeplock;
 struct stat;
 struct superblock;
 
-// container.c
-int             create_container(void);
-int             destroy_container(int);
-int             leave_container(void);
-int             join_container(int);
-void            container_init(void);
-
 // bio.c
 void            binit(void);
 struct buf*     bread(uint, uint);
@@ -131,7 +124,11 @@ int             wait(void);
 void            wakeup(void*);
 void            yield(void);
 void            print_processes();
-
+int             create_container(void);
+int             destroy_container(int);
+int             leave_container();
+int             join_container(int);
+void            container_init(void);
 // swtch.S
 void            swtch(struct context**, struct context*);
 

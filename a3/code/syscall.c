@@ -6,7 +6,6 @@
 #include "proc.h"
 #include "x86.h"
 #include "syscall.h"
-#include "container.h"
 
 // User code makes a system call with INT T_SYSCALL.
 // System call number in %eax.
@@ -172,19 +171,20 @@ sys_create_container(void)
   return create_container();
 }
 
-int 
-sys_leave_container(void)
-{
-  return leave_container();
-}
-
 int
 sys_join_container(void)
 {
   int container_num;
   if(argint(0, &container_num) < 0)
     return -1;
+  
   return join_container(container_num);
+}
+
+int 
+sys_leave_container(void)
+{
+  return leave_container();
 }
 
 int
