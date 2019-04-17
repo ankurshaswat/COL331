@@ -1,6 +1,7 @@
 OBJS = \
 	bio.o\
 	console.o\
+	container.o\
 	exec.o\
 	file.o\
 	fs.o\
@@ -181,7 +182,6 @@ UPROGS=\
 	_usertests\
 	_wc\
 	_zombie\
-	_container_manager\
 	_user_test_assig3\
 
 fs.img: mkfs README $(UPROGS)
@@ -250,7 +250,7 @@ qemu-nox-gdb: fs.img xv6.img .gdbinit
 # check in that version.
 
 EXTRA=\
-	container_manager.c user_test_assig3.c\
+	user_test_assig3.c\
 	mkfs.c ulib.c user.h cat.c echo.c forktest.c grep.c kill.c\
 	ln.c ls.c mkdir.c rm.c stressfs.c usertests.c wc.c zombie.c\
 	printf.c umalloc.c\

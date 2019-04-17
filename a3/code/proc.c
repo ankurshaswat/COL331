@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "container.h"
 
 struct {
   struct spinlock lock;
@@ -19,6 +20,20 @@ extern void forkret(void);
 extern void trapret(void);
 
 static void wakeup1(void *chan);
+
+void print_processes(void) {
+
+  struct proc *p;
+
+  acquire(&ptable.lock);
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    if(p->state != UNUSED) {
+      cprintf("pid:%d name:%s\n",p->pid,p->name);
+    }
+
+  release(&ptable.lock);
+}
 
 void
 pinit(void)
@@ -112,6 +127,9 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  // Belongs to no container initially
+  p->container_id = -1;
+
   return p;
 }
 
@@ -141,6 +159,8 @@ userinit(void)
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
+
+  container_init();
 
   // this assignment to p->state lets other cores
   // run this process. the acquire forces the above

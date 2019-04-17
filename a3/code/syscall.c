@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "x86.h"
 #include "syscall.h"
+#include "container.h"
 
 // User code makes a system call with INT T_SYSCALL.
 // System call number in %eax.
@@ -155,43 +156,14 @@ syscall(void)
 }
 
 // lock this afterward
-int containers[10] = {0};
+// int containers[10] = {0};
 
 int
-create_container(void)
+sys_ps(void)
 {
-  int selected_container = -1;
-
-  for(int i=0;i<NELEM(containers);i++) {
-    if(containers[i] == 0) {
-      containers[i] = 1;
-      selected_container = i;
-      break;
-    }
-  }
-
-  if(selected_container<0) {
-    return -1;
-  }
-
-  // char c = '0' + selected_container;
-
-  char *argv[] = { "container_manager", (char*)&selected_container ,0 };
-  fork_modified2("container_manager",argv);
-
-  // cprintf("Fork started by %d\n",myproc()->pid);
-  
-  // free container available marker if failed
-
-  return selected_container;
-  
-  // if(fork_modified(selected_container)<0) {
-  //   return -1;
-  // }
-  // // char x = '0' +selected_container;
-  // char *argv[] = { "container_manager", (char*)selected_container , 0 };
-  // exec("container_manager",argv);
-  // return 0;
+  // Modify ps to work with containers
+  print_processes();
+  return 0;
 }
 
 int 
@@ -200,26 +172,26 @@ sys_create_container(void)
   return create_container();
 }
 
-int
-sys_ps(void)
-{
-  return -1;
-}
-
 int 
 sys_leave_container(void)
 {
-  return -1;
+  return leave_container();
 }
 
 int
 sys_join_container(void)
 {
-  return -1;
+  int container_num;
+  if(argint(0, &container_num) < 0)
+    return -1;
+  return join_container(container_num);
 }
 
 int
 sys_destroy_container(void)
 {
-  return -1;
+  int container_num;
+  if(argint(0, &container_num) < 0)
+    return -1;
+  return destroy_container(container_num);
 }
