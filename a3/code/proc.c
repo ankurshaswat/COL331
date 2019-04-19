@@ -16,6 +16,7 @@ struct
 } ctable;
 
 int next_container_id = 0;
+int log_ = 0;
 
 struct
 {
@@ -484,6 +485,7 @@ void scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
+  // int next = -1;
 
   for (;;)
   {
@@ -504,8 +506,31 @@ void scheduler(void)
       switchuvm(p);
       p->state = RUNNING;
 
+      if (log_ == 1 && p->container_id != -1)
+      {
+        cprintf("Container %d : Scheduling process %d", p->container_id, p->pid);
+      }
+
       swtch(&(c->scheduler), p->context);
       switchkvm();
+
+      // if (p->state == RUNNABLE && p->container_id != -1)
+      // {
+      //   p->state = V_SLEEPING;
+      //   next = schedule_next(p->container_id, p->pid, p->state);
+      //   struct proc *p_loc;
+      //   for (p_loc = ptable.proc; p_loc < &ptable.proc[NPROC]; p_loc++)
+      //   {
+      //     if (p_loc->pid == next)
+      //     {
+      //       p_loc->state = RUNNABLE;
+      //     }
+      //   }
+      // }
+      // else if (p->container_id != -1)
+      // {
+      //   panic("What to do");
+      // }
 
       // Process is done running for now.
       // It should have changed its p->state before coming back.
@@ -692,6 +717,63 @@ void procdump(void)
   }
 }
 
+/* ------------------------------- */
+
+void scheduler_log_on(void)
+{
+  log_ = 1;
+}
+
+void scheduler_log_off(void)
+{
+  log_ = 0;
+}
+
+// int schedule_next(int cid, int pid_last, int state)
+// {
+//   struct container *c;
+
+//   acquire(&ctable.lock);
+
+//   for (c = ctable.container; c < &ctable.container[NCONTAINERS]; c++)
+//   {
+//     if (c->container_id == cid)
+//     {
+//       break;
+//     }
+//   }
+
+//   int i;
+//   for (i = 0; i < NUM_STORE_MAPS; i++)
+//   {
+//     if (c->pmap.global_id[i] == pid_last)
+//     {
+//       c->pmap.state[i] = state;
+//       break;
+//     }
+//   }
+
+//   i++;
+
+//   int count;
+//   for (count = 0; count < NUM_STORE_MAPS; count++)
+//   {
+//     if (c->pmap.state == RUNNABLE)
+//     {
+//       release(&ctable.lock);
+//       if (log_ == 1)
+//       {
+//         cprintf("Container %d : Scheduling process %d", cid, c->pmap.global_id[i]);
+//       }
+//       return c->pmap.global_id[i];
+//     }
+//     i = (i + 1) % NUM_STORE_MAPS;
+//   }
+
+//   release(&ctable.lock);
+//   return -1;
+// }
+
 int create_container(void)
 {
   struct container *c;
@@ -699,12 +781,8 @@ int create_container(void)
   acquire(&ctable.lock);
 
   for (c = ctable.container; c < &ctable.container[NCONTAINERS]; c++)
-  {
     if (c->state == UNUSED_CONTAINER)
-    {
       goto found;
-    }
-  }
 
   release(&ctable.lock);
   return -1;
@@ -716,44 +794,15 @@ found:
 
   c->process_id = 0;
 
-  int *id_pos;
-  for (id_pos = c->pmap.local_id; id_pos < &c->pmap.local_id[NUM_STORE_MAPS]; id_pos++)
+  int i;
+  for (i = 0; i < NUM_STORE_MAPS; i++)
   {
-    *id_pos = -1;
+    c->pmap.state[i] = UNUSED;
   }
 
   release(&ctable.lock);
 
   return c->container_id;
-}
-
-int leave_container()
-{
-  int global_pid = myproc()->pid;
-  int cid = myproc()->container_id;
-
-  struct container *c;
-
-  int i = 0;
-
-  acquire(&ctable.lock);
-  for (c = ctable.container; c < &ctable.container[NCONTAINERS]; c++)
-  {
-    if (c->container_id == cid)
-    {
-      for (i = 0; i < NUM_STORE_MAPS; i++)
-      {
-        if (c->pmap.global_id[i] == global_pid)
-        {
-          c->pmap.local_id[i] = -1;
-          release(&ctable.lock);
-          return 0;
-        }
-      }
-    }
-  }
-
-  return -1;
 }
 
 int join_container(int cid)
@@ -769,6 +818,7 @@ int join_container(int cid)
     if (p->pid == pid)
     {
       p->container_id = cid;
+      // p->state = RUNNABLE;
       release(&ptable.lock);
       goto container_alloc;
     }
@@ -778,36 +828,64 @@ int join_container(int cid)
 
 container_alloc:
 
-
   acquire(&ctable.lock);
   for (c = ctable.container; c < &ctable.container[NCONTAINERS]; c++)
-  {
     if (c->container_id == cid)
     {
       for (i = 0; i < NUM_STORE_MAPS; i++)
       {
-        if (c->pmap.local_id[i] == -1)
+        if (c->pmap.state[i] == UNUSED)
         {
+          c->pmap.state[i] = RUNNABLE;
           c->pmap.local_id[i] = c->process_id++;
           c->pmap.global_id[i] = pid;
           safestrcpy(c->pmap.names[i], myproc()->name, sizeof(myproc()->name));
-
           release(&ctable.lock);
           return c->pmap.local_id[i];
         }
       }
     }
-  }
 
 fail:
   if (holding(&ptable.lock))
-  {
     release(&ptable.lock);
-  }
   if (holding(&ctable.lock))
-  {
     release(&ctable.lock);
-  }
+  return -1;
+}
+
+int leave_container()
+{
+  int global_pid = myproc()->pid;
+  int cid = myproc()->container_id;
+
+  struct container *c;
+  struct proc *p;
+
+  int i = 0;
+
+  acquire(&ptable.lock);
+  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    if (p->pid == global_pid)
+    {
+      p->container_id = -1;
+      break;
+    }
+
+  release(&ptable.lock);
+
+  acquire(&ctable.lock);
+
+  for (c = ctable.container; c < &ctable.container[NCONTAINERS]; c++)
+    if (c->container_id == cid)
+      for (i = 0; i < NUM_STORE_MAPS; i++)
+        if (c->pmap.global_id[i] == global_pid)
+        {
+          c->pmap.state[i] = UNUSED;
+          release(&ctable.lock);
+          return 0;
+        }
+
   return -1;
 }
 
@@ -818,27 +896,22 @@ int destroy_container(int cid)
   acquire(&ptable.lock);
 
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-  {
     if (p->container_id == cid)
-    {
       p->container_id = -1;
-    }
-  }
 
   release(&ptable.lock);
 
   // see what to do about assosciated files and other things
+
   struct container *c;
   acquire(&ctable.lock);
   for (c = ctable.container; c < &ctable.container[NCONTAINERS]; c++)
-  {
     if (c->container_id == cid)
     {
       c->state = UNUSED_CONTAINER;
       release(&ctable.lock);
       return 0;
     }
-  }
 
   return -1;
 }
@@ -854,9 +927,7 @@ void print_processes(void)
 
     for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
       if (p->state != UNUSED && p->container_id == -1)
-      {
         cprintf("pid:%d name:%s\n", p->pid, p->name);
-      }
 
     release(&ptable.lock);
   }
@@ -864,20 +935,17 @@ void print_processes(void)
   {
     struct container *c;
     int i;
+
     acquire(&ctable.lock);
+    cprintf("called\n");
     for (c = ctable.container; c < &ctable.container[NCONTAINERS]; c++)
-    {
       if (c->container_id == cid)
       {
         for (i = 0; i < NUM_STORE_MAPS; i++)
-        {
-          if (c->pmap.local_id[i] == -1)
-          {
-            cprintf("pid:%d name:%s\n", c->pmap.local_id[i], c->pmap.names[i]);
-          }
-        }
+          if (c->pmap.state[i] != UNUSED)
+            cprintf("pid:%d cid:%d name:%s\n", c->pmap.local_id[i], cid, c->pmap.names[i]);
         release(&ctable.lock);
+        return;
       }
-    }
   }
 }
