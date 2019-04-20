@@ -28,10 +28,8 @@ uint destroy_container(uint container_id);
 uint join_container(uint container_id);
 uint leave_container(void);
 void ps(void);
-void scheduler_log_on(void);
-void scheduler_log_off(void);
-void memory_log_on(void);
-void memory_log_off(void);
+void scheduler_log(int);
+void memory_log(int);
 
 // ulib.c
 int stat(const char*, struct stat*);

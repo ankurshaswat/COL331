@@ -508,7 +508,7 @@ void scheduler(void)
 
       if (log_ == 1 && p->container_id != -1)
       {
-        cprintf("Container %d : Scheduling process %d", p->container_id, p->pid);
+        cprintf("Container %d : Scheduling process %d\n", p->container_id, p->pid);
       }
 
       swtch(&(c->scheduler), p->context);
@@ -719,14 +719,9 @@ void procdump(void)
 
 /* ------------------------------- */
 
-void scheduler_log_on(void)
+void scheduler_log(int n)
 {
-  log_ = 1;
-}
-
-void scheduler_log_off(void)
-{
-  log_ = 0;
+  log_ = n > 0;
 }
 
 // int schedule_next(int cid, int pid_last, int state)
@@ -883,6 +878,7 @@ int leave_container()
         {
           c->pmap.state[i] = UNUSED;
           release(&ctable.lock);
+          cprintf("pid:%d left container:%d\n", global_pid, cid);
           return 0;
         }
 
@@ -937,7 +933,6 @@ void print_processes(void)
     int i;
 
     acquire(&ctable.lock);
-    cprintf("called\n");
     for (c = ctable.container; c < &ctable.container[NCONTAINERS]; c++)
       if (c->container_id == cid)
       {

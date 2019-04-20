@@ -25,3 +25,5 @@
 #define SYS_leave_container 24
 #define SYS_join_container 25
 #define SYS_destroy_container 26
+#define SYS_scheduler_log 27
+#define SYS_memory_log 28
