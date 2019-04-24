@@ -28,6 +28,10 @@ void barrier(int pipes[][2], int pipe_id, int type)
   }
 }
 
+/* Seperate unit test for copy on write testing 
+ * Also included in bigger test case below 
+ * no need to uncomment */
+
 // int main(int argc, char *argv[])
 // {
 //   // int *temp = malloc(sizeof(int));
@@ -98,8 +102,6 @@ int main(int argc, char *argv[])
   for (i = 0; i < 6; i++)
     if (pipe(pipes[i]) < 0)
       exit();
-
-  /* ---------------------- */
 
   /* Creating the containers . */
   container1 = create_container();
@@ -203,14 +205,11 @@ int main(int argc, char *argv[])
   memory_log(0); // Disable the memory logs after printing mapping from all the containers atleast once.
 
   /* ---------------- FILE SYSTEM TEST ---------------- */
-  // printf(1, "going to read %d\n", getpid());
 
   /* Executed by all the child processes in all the containers */
   if (pid == 0)
   {
-    // printf(1, "going to read\n");
     read(pipes[pipe_id][0], temp, sizeof(temp));
-    // printf(1, "Read\n");
     printf(1, "Running ls for pid:%d container:%d\n", getpid(), mycontainer);
     ls("."); // This will print the host file system
     if (pipe_id < 5)
@@ -222,7 +221,6 @@ int main(int argc, char *argv[])
   {
     write(pipes[1][1], temp, sizeof(temp));
   }
-  // printf(1, "going to read %d\n", getpid());
 
   barrier(pipes, pipe_id, type);
 
@@ -277,7 +275,6 @@ int main(int argc, char *argv[])
     printf(1, "Running cat\n");
     fd = open("my_file", O_RDONLY);
     cat(fd); // The contents of the file should be different for process running across containers.
-    // ls(".");
     if (pipe_id < 5)
     {
       write(pipes[pipe_id + 1][1], temp, sizeof(temp));
@@ -307,7 +304,6 @@ int main(int argc, char *argv[])
     printf(1, "Running cat\n");
     fd = open("my_file2", O_RDONLY);
     cat(fd); // The contents of the file should be different for process running across containers.
-    // ls(".");
     if (pipe_id < 5)
     {
       write(pipes[pipe_id + 1][1], temp, sizeof(temp));

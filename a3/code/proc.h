@@ -101,7 +101,6 @@ struct container
   struct process_table pmap;
   int process_id;
   int num_procs_active;
-  int last_run_proc;
 };
 // Process memory is laid out contiguously, low addresses first:
 //   text
