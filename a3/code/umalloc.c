@@ -67,7 +67,7 @@ morecore(uint nu)
 void *
 malloc(uint nbytes)
 {
-  printf(1, "here\n");
+  // printf(1, "here\n");
   Header *p, *prevp;
   uint nunits;
 
@@ -90,6 +90,7 @@ malloc(uint nbytes)
         p->s.size = nunits;
       }
       freep = prevp;
+      make_page_table_entry((int)(p + 1));
       return (void *)(p + 1);
     }
     if (p == freep)

@@ -27,3 +27,5 @@
 #define SYS_destroy_container 26
 #define SYS_scheduler_log 27
 #define SYS_memory_log 28
+#define SYS_make_page_table_entry 29
+#define SYS_get_container_id 30

@@ -32,7 +32,6 @@ filealloc(void)
   for(f = ftable.file; f < ftable.file + NFILE; f++){
     if(f->ref == 0){
       f->ref = 1;
-      f->container_id = -1;
       release(&ftable.lock);
       return f;
     }
@@ -104,6 +103,7 @@ fileread(struct file *f, char *addr, int n)
   if(f->type == FD_PIPE)
     return piperead(f->pipe, addr, n);
   if(f->type == FD_INODE){
+    // cprintf("here\n");
     ilock(f->ip);
     if((r = readi(f->ip, addr, f->off, n)) > 0)
       f->off += r;

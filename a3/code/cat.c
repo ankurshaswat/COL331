@@ -21,23 +21,23 @@ cat(int fd)
   }
 }
 
-int
-main(int argc, char *argv[])
-{
-  int fd, i;
+// int
+// main(int argc, char *argv[])
+// {
+//   int fd, i;
 
-  if(argc <= 1){
-    cat(0);
-    exit();
-  }
+//   if(argc <= 1){
+//     cat(0);
+//     exit();
+//   }
 
-  for(i = 1; i < argc; i++){
-    if((fd = open(argv[i], 0)) < 0){
-      printf(1, "cat: cannot open %s\n", argv[i]);
-      exit();
-    }
-    cat(fd);
-    close(fd);
-  }
-  exit();
-}
+//   for(i = 1; i < argc; i++){
+//     if((fd = open(argv[i], 0)) < 0){
+//       printf(1, "cat: cannot open %s\n", argv[i]);
+//       exit();
+//     }
+//     cat(fd);
+//     close(fd);
+//   }
+//   exit();
+// }

@@ -106,6 +106,8 @@ extern int sys_join_container(void);
 extern int sys_destroy_container(void);
 extern int sys_scheduler_log(void);
 extern int sys_memory_log(void);
+extern int sys_make_page_table_entry(void);
+extern int sys_get_container_id(void);
 
 static int (*syscalls[])(void) = {
     [SYS_fork] sys_fork,
@@ -135,7 +137,10 @@ static int (*syscalls[])(void) = {
     [SYS_join_container] sys_join_container,
     [SYS_destroy_container] sys_destroy_container,
     [SYS_scheduler_log] sys_scheduler_log,
-    [SYS_memory_log] sys_memory_log};
+    [SYS_memory_log] sys_memory_log,
+    [SYS_make_page_table_entry] sys_make_page_table_entry,
+    [SYS_get_container_id] sys_get_container_id,
+    };
 
 void syscall(void)
 {

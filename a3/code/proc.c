@@ -15,8 +15,9 @@ struct
   struct container container[NCONTAINERS];
 } ctable;
 
-int next_container_id = 0;
+int next_container_id = 1;
 int log_ = 0;
+int container_scheduled_next = 0;
 
 struct
 {
@@ -128,7 +129,7 @@ found:
   p->context->eip = (uint)forkret;
 
   // Belongs to no container initially
-  p->container_id = -1;
+  p->container_id = 0;
 
   return p;
 }
@@ -169,41 +170,6 @@ void userinit(void)
 
   release(&ptable.lock);
 }
-
-// void
-// containerinit(void) {
-//     struct proc *p;
-//   extern char _binary_containercode_start[], _binary_containercode_size[];
-
-//   p = allocproc();
-
-//   // initproc = p;
-//   if((p->pgdir = setupkvm()) == 0)
-//     panic("userinit: out of memory?");
-//   inituvm(p->pgdir, _binary_containercode_start, (int)_binary_containercode_size);
-//   p->sz = PGSIZE;
-//   memset(p->tf, 0, sizeof(*p->tf));
-//   p->tf->cs = (SEG_UCODE << 3) | DPL_USER;
-//   p->tf->ds = (SEG_UDATA << 3) | DPL_USER;
-//   p->tf->es = p->tf->ds;
-//   p->tf->ss = p->tf->ds;
-//   p->tf->eflags = FL_IF;
-//   p->tf->esp = PGSIZE;
-//   p->tf->eip = 0;  // beginning of initcode.S
-
-//   safestrcpy(p->name, "initcode", sizeof(p->name));
-//   p->cwd = namei("/");
-
-//   // this assignment to p->state lets other cores
-//   // run this process. the acquire forces the above
-//   // writes to be visible, and the lock is also needed
-//   // because the assignment might not be atomic.
-//   acquire(&ptable.lock);
-
-//   p->state = RUNNABLE;
-
-//   release(&ptable.lock);
-// }
 
 // Grow current process's memory by n bytes.
 // Return 0 on success, -1 on failure.
@@ -472,6 +438,38 @@ int wait(void)
   }
 }
 
+// int next_container(int prev_container)
+// {
+//   int i;
+
+//   acquire(&ctable.lock);
+//   for (i = 0; i < NCONTAINERS; i++)
+//   {
+//     if (ctable.container[i].container_id == prev_container)
+//     {
+//       break;
+//     }
+//   }
+
+//   i = (i + 1) % NCONTAINERS;
+
+//   int count;
+//   int next_container_id = 0;
+//   for (count = 0; count < NCONTAINERS; count++)
+//   {
+//     if (ctable.container[i].state == IN_USE && ctable.container[i].num_procs_active > 0)
+//     {
+//       next_container_id = ctable.container[i].container_id;
+//       release(&ctable.lock);
+//       break;
+//     }
+//     i = (i + 1) % NCONTAINERS;
+//   }
+
+//   cprintf("%d to %d\n", prev_container, next_container_id);
+//   return next_container_id;
+// }
+
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -497,7 +495,17 @@ void scheduler(void)
     for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     {
       if (p->state != RUNNABLE)
+      {
         continue;
+      }
+
+      // if (container_scheduled_next != 0)
+      //   if (p->container_id == container_scheduled_next)
+      //     container_scheduled_next = next_container(container_scheduled_next);
+      //   else
+      //     continue;
+      // else if (p->container_id != 0)
+      //   container_scheduled_next = next_container(p->container_id);
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
@@ -506,31 +514,13 @@ void scheduler(void)
       switchuvm(p);
       p->state = RUNNING;
 
-      if (log_ == 1 && p->container_id != -1)
+      if (log_ == 1 && p->container_id != 0)
       {
         cprintf("Container %d : Scheduling process %d\n", p->container_id, p->pid);
       }
 
       swtch(&(c->scheduler), p->context);
       switchkvm();
-
-      // if (p->state == RUNNABLE && p->container_id != -1)
-      // {
-      //   p->state = V_SLEEPING;
-      //   next = schedule_next(p->container_id, p->pid, p->state);
-      //   struct proc *p_loc;
-      //   for (p_loc = ptable.proc; p_loc < &ptable.proc[NPROC]; p_loc++)
-      //   {
-      //     if (p_loc->pid == next)
-      //     {
-      //       p_loc->state = RUNNABLE;
-      //     }
-      //   }
-      // }
-      // else if (p->container_id != -1)
-      // {
-      //   panic("What to do");
-      // }
 
       // Process is done running for now.
       // It should have changed its p->state before coming back.
@@ -785,6 +775,11 @@ int create_container(void)
 found:
   c->state = IN_USE;
   c->container_id = next_container_id;
+  c->num_procs_active = 0;
+  // if (container_scheduled_next == -1)
+  // {
+  //   container_scheduled_next = next_container_id;
+  // }
   next_container_id++;
 
   c->process_id = 0;
@@ -834,8 +829,16 @@ container_alloc:
           c->pmap.state[i] = RUNNABLE;
           c->pmap.local_id[i] = c->process_id++;
           c->pmap.global_id[i] = pid;
+          c->num_procs_active++;
           safestrcpy(c->pmap.names[i], myproc()->name, sizeof(myproc()->name));
+          cprintf("pid:%d joined container:%d\n", pid, cid);
           release(&ctable.lock);
+
+          // if (container_scheduled_next == 0)
+          // {
+          //   container_scheduled_next = c->container_id;
+          // }
+
           return c->pmap.local_id[i];
         }
       }
@@ -863,7 +866,7 @@ int leave_container()
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if (p->pid == global_pid)
     {
-      p->container_id = -1;
+      p->container_id = 0;
       break;
     }
 
@@ -877,6 +880,11 @@ int leave_container()
         if (c->pmap.global_id[i] == global_pid)
         {
           c->pmap.state[i] = UNUSED;
+          c->num_procs_active--;
+          // if (c->num_procs_active < 1 && container_scheduled_next == c->container_id)
+          // {
+          //   container_scheduled_next = next_container(container_scheduled_next);
+          // }
           release(&ctable.lock);
           cprintf("pid:%d left container:%d\n", global_pid, cid);
           return 0;
@@ -893,7 +901,7 @@ int destroy_container(int cid)
 
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if (p->container_id == cid)
-      p->container_id = -1;
+      p->container_id = 0;
 
   release(&ptable.lock);
 
@@ -915,14 +923,14 @@ int destroy_container(int cid)
 void print_processes(void)
 {
   int cid = myproc()->container_id;
-  if (cid == -1)
+  if (cid == 0)
   {
     struct proc *p;
 
     acquire(&ptable.lock);
 
     for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-      if (p->state != UNUSED && p->container_id == -1)
+      if (p->state != UNUSED && p->container_id == 0)
         cprintf("pid:%d name:%s\n", p->pid, p->name);
 
     release(&ptable.lock);

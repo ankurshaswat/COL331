@@ -53,5 +53,9 @@ struct dinode {
 struct dirent {
   ushort inum;
   char name[DIRSIZ];
+  int container;
+  int pad1;
+  int pad2;
+  int pad3;
 };
 
